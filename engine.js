@@ -42,6 +42,16 @@ function fmtCurrency(n) {
     maximumFractionDigits: 2,
   }).format(n);
 }
+
+const REPORT_STEPS = new Set([
+  "rep_categoria",
+  "rep_direccion",
+  "rep_desc",
+  "rep_fotos_preg",
+  "rep_fotos_subida",
+  "rep_derivar",
+]);
+
 function num(v) {
   if (typeof v !== "string") return Number(v);
   const normalized = v.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
@@ -472,10 +482,11 @@ async function handleNLUIntent(nlu, s) {
 async function handleImage({ chatId, file }) {
   const s = getSession(chatId);
   s.data.fotos = s.data.fotos || [];
-  s.data.fotos.push(file); // {url, type, name}
+  s.data.fotos.push(file);
 
   const replies = [];
 
+  // si ya estaba en modo subir varias, mantener
   if (s.step === "rep_fotos_subida") {
     replies.push(
       "📸 ¡Foto recibida! Podés enviar otra. Cuando termines, escribí *listo*."
@@ -483,22 +494,25 @@ async function handleImage({ chatId, file }) {
     return { replies, session: s };
   }
 
+  // si está en cualquier paso del flujo de daños, pasamos a "subida"
   if (
-    ["rep_categoria", "rep_direccion", "rep_desc", "rep_derivar"].includes(
-      s.step
-    )
+    [
+      "rep_categoria",
+      "rep_direccion",
+      "rep_desc",
+      "rep_fotos_preg",
+      "rep_derivar",
+    ].includes(s.step)
   ) {
-    replies.push("📸 ¡Gracias por la foto! La añadí al reporte.");
-    if (s.step === "rep_direccion")
-      replies.push("Cuando puedas, pasame la *dirección del inmueble*:");
-    else if (s.step === "rep_desc")
-      replies.push(
-        "Si querés, podés agregar otra foto o contar una *descripción* (qué pasó, desde cuándo)."
-      );
-  } else {
-    replies.push("📸 ¡Gracias por la imagen!");
+    s.step = "rep_fotos_subida";
+    replies.push(
+      "📸 ¡Foto recibida! Podés enviar otra. Cuando termines, escribí *listo*."
+    );
+    return { replies, session: s };
   }
 
+  // fuera del flujo de daños
+  replies.push("📸 ¡Gracias por la imagen!");
   return { replies, session: s };
 }
 
@@ -530,6 +544,17 @@ async function handleText({ chatId, text }) {
     return { replies, notifyAgent, session: getSession(chatId) };
   }
   if (["operador", "humano", "agente", "asesor"].includes(body)) {
+    if (REPORT_STEPS.has(s.step)) {
+      // diferir handoff y forzar el paso de fotos
+      s.step = "rep_fotos_preg";
+      return {
+        replies: [
+          "👤 Te paso con un agente enseguida. Antes, ¿tenés fotos para adjuntar? (sí/no)",
+        ],
+        notifyAgent: null,
+        session: s,
+      };
+    }
     replies.push("👤 Te derivo con un integrante del equipo. (Demo).");
     notifyAgent = { motivo: "Pedido de operador" };
     return { replies, notifyAgent, session: s };
@@ -749,14 +774,12 @@ async function handleText({ chatId, text }) {
       break;
     }
     case "rep_desc": {
-      // si hasta acá era “Otro”, re-intentar deducir por la descripción
       const deduced = normalizeIssueCategory(bodyRaw);
       if (!s.data.categoria || s.data.categoria === "Otro") {
         if (deduced) s.data.categoria = deduced;
       }
-
       s.data.descripcion = bodyRaw;
-      s.step = "rep_fotos_preg"; // 👈 pasamos a preguntar por fotos
+      s.step = "rep_fotos_preg";
       replies.push("📷 ¿Tenés fotos para adjuntar? (sí/no)");
       break;
     }
@@ -780,7 +803,6 @@ async function handleText({ chatId, text }) {
       break;
     }
     case "rep_fotos_subida": {
-      // si el usuario escribe “listo/ya/ok”, cerramos este paso
       if (/^(listo|lista|ya|ok|de una|dale)$/i.test(bodyRaw.trim())) {
         s.step = "rep_derivar";
         replies.push(
@@ -789,7 +811,6 @@ async function handleText({ chatId, text }) {
           )}\n\n¿Querés que te atienda alguien del equipo? (sí/no)`
         );
       } else {
-        // cualquier otro texto: recordatorio amable
         replies.push(
           "Podés adjuntar fotos ahora. Cuando termines, escribí *listo*."
         );
