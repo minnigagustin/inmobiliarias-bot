@@ -36,6 +36,44 @@ function addImage(src, who = "user") {
   scrollToBottom();
 }
 
+function addButtons(buttons) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg"; // mensaje del bot
+  const bubble = document.createElement("div");
+  bubble.className = "bubble buttons";
+
+  const group = document.createElement("div");
+  group.className = "btn-group";
+
+  buttons.forEach((b) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "choice-btn";
+    btn.textContent = b.label || b.value;
+    btn.setAttribute("data-value", b.value);
+    btn.addEventListener("click", () => {
+      // Al elegir, enviamos como si el usuario escribiera
+      const value = btn.getAttribute("data-value") || btn.textContent;
+      // feedback visual: deshabilitar/remover botones
+      [...group.querySelectorAll("button")].forEach((x) => (x.disabled = true));
+      group.classList.add("used");
+
+      addMessage(btn.textContent, "user");
+      startTypingTimer();
+      socket.emit("user_message", { text: value });
+
+      // opcional: retirar completamente el grupo
+      wrap.remove();
+    });
+    group.appendChild(btn);
+  });
+
+  bubble.appendChild(group);
+  wrap.appendChild(bubble);
+  messagesEl.appendChild(wrap);
+  scrollToBottom();
+}
+
 /* ---------- Typing indicator ---------- */
 let typingTimer = null;
 function showTyping() {
@@ -65,8 +103,12 @@ function stopTyping() {
 /* ---------- Sockets ---------- */
 socket.on("bot_message", (msg) => {
   stopTyping();
-  addMessage(msg.text, "bot");
+  if (msg.text) addMessage(msg.text, "bot");
+  if (msg.buttons && Array.isArray(msg.buttons) && msg.buttons.length) {
+    addButtons(msg.buttons);
+  }
 });
+
 socket.on("system_message", (msg) => {
   stopTyping();
   addMessage(msg.text, "system");

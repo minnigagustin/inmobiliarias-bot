@@ -125,3 +125,35 @@ button[type="submit"]:hover { filter: brightness(1.05); }
   0%, 80%, 100% { transform: translateY(0); opacity:.35; }
   40% { transform: translateY(-3px); opacity: .95; }
 }
+
+/* ----- Botones de opciones ----- */
+.bubble.buttons {
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+}
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choice-btn {
+  appearance: none;
+  border: 1px solid rgba(34,211,238,.35);
+  background: rgba(34,211,238,.14);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.choice-btn:hover { filter: brightness(1.06); }
+.choice-btn:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.btn-group.used .choice-btn:not(:disabled) { opacity: .6; }
