@@ -231,19 +231,32 @@ fileInput.addEventListener("change", () => {
   if (!files.length) return;
 
   files.forEach((file) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      addImage(dataUrl, "user");
-      if (!humanMode) startTypingTimer();
-      socket.emit("user_image", {
-        name: file.name,
-        type: file.type,
-        data: dataUrl,
-      });
-    };
-    reader.readAsDataURL(file);
+    console.log("Archivo seleccionado:", file);
+    console.log("Tipo de archivo:", file.type);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        console.log("Imagen cargada correctamente:", dataUrl);
+        addImage(dataUrl, "user");
+        if (!humanMode) startTypingTimer();
+        console.log("por emitir user image");
+        console.log({
+          name: file.name,
+          type: file.type,
+          data: dataUrl,
+        });
+        socket.emit("user_image", {
+          name: file.name,
+          type: file.type,
+          data: dataUrl,
+        });
+        console.log("user image emitido");
+      };
+      reader.readAsDataURL(file);
+    } else {
+      console.error("El archivo seleccionado no es una imagen válida.");
+    }
   });
-
   fileInput.value = "";
 });

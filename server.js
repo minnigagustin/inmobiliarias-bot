@@ -87,8 +87,9 @@ function pushTranscript(chatId, msg) {
 /* ====================== Server & Sockets ====================== */
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
-
+const io = new Server(server, {
+  maxHttpBufferSize: 10 * 1024 * 1024, // 10 MB
+});
 app.use(express.static(path.join(__dirname, "public")));
 const uploadsDir = path.join(__dirname, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -316,7 +317,9 @@ io.on("connection", (socket) => {
 
   // imagen del usuario
   socket.on("user_image", async (payload) => {
+    console.log("este es el payload");
     try {
+      console.log("Archivo recibido:", payload);
       const { name, type, data } = payload || {};
       const base64 = String(data || "").split(",")[1];
       if (!base64) return;
