@@ -260,3 +260,63 @@ fileInput.addEventListener("change", () => {
   });
   fileInput.value = "";
 });
+
+/* ---------- ⭐ Calificación ---------- */
+function renderRatingPrompt(agentName) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg"; // burbuja del bot
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble buttons";
+
+  const title = document.createElement("div");
+  title.style.marginBottom = "6px";
+  title.textContent = `¿Cómo fue la atención con ${agentName || "el agente"}?`;
+  bubble.appendChild(title);
+
+  const group = document.createElement("div");
+  group.className = "btn-group";
+
+  // 5 botones: 1..5
+  for (let i = 1; i <= 5; i++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "choice-btn";
+    b.textContent = "★".repeat(i) + "☆".repeat(5 - i); // ej: ★★★☆☆
+    b.setAttribute("data-stars", i);
+    b.addEventListener("click", () => {
+      // feedback en el chat del usuario
+      addMessage(b.textContent, "user");
+      [...group.querySelectorAll("button")].forEach((x) => (x.disabled = true));
+      group.classList.add("used");
+      wrap.remove();
+      socket.emit("rate_submit", { stars: i, skipped: false });
+    });
+    group.appendChild(b);
+  }
+
+  // Omitir
+  const skip = document.createElement("button");
+  skip.type = "button";
+  skip.className = "choice-btn";
+  skip.textContent = "Omitir";
+  skip.addEventListener("click", () => {
+    addMessage("Omitir", "user");
+    [...group.querySelectorAll("button")].forEach((x) => (x.disabled = true));
+    group.classList.add("used");
+    wrap.remove();
+    socket.emit("rate_submit", { skipped: true });
+  });
+  group.appendChild(skip);
+
+  bubble.appendChild(group);
+  wrap.appendChild(bubble);
+  messagesEl.appendChild(wrap);
+  scrollToBottom();
+}
+
+// Pedir calificación al finalizar el chat humano
+socket.on("rate_request", ({ agent }) => {
+  // ya estamos fuera de humanMode por agent_finished
+  renderRatingPrompt(agent);
+});

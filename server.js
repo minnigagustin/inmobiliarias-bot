@@ -130,10 +130,17 @@ function endHumanChat(chatId, who, io, adminIo) {
       : "✅ Finalizaste la conversación. Volvemos al asistente.";
 
   io.to(chatId).emit("system_message", { text: msgUser });
-  io.to(chatId).emit("agent_finished", {}); // 👈 evento para que el cliente salga de modo humano
-  pushTranscript(chatId, { who: "system", text: msgUser, ts: Date.now() });
+  io.to(chatId).emit("agent_finished", {});
 
-  // Aviso del otro lado
+  // ⭐ Pedir calificación (5 estrellas u omitir)
+  io.to(chatId).emit("rate_request", { agent: info.agentName || "Agente" });
+  pushTranscript(chatId, {
+    who: "system",
+    text: "Se solicitó una calificación.",
+    ts: Date.now(),
+  });
+
+  // Aviso al agente…
   adminIo.to(info.agentId).emit("chat_message", {
     chatId,
     who: "system",
@@ -144,7 +151,7 @@ function endHumanChat(chatId, who, io, adminIo) {
     ts: Date.now(),
   });
 
-  // Reseteamos flujo del bot
+  // Reset del flujo del bot (la UI volverá al menú tras rate_submit)
   reset(chatId);
 }
 
@@ -399,6 +406,38 @@ io.on("connection", (socket) => {
 
   // 👇 NUEVO: el usuario finaliza
   socket.on("user_finish", () => endHumanChat(socket.id, "user", io, adminIo));
+
+  // ⭐ Recepción de calificación u omisión
+  socket.on("rate_submit", async ({ stars, skipped }) => {
+    const txt = skipped
+      ? "El usuario omitió la calificación."
+      : `Puntaje recibido: ${Number(stars)}/5`;
+    pushTranscript(socket.id, { who: "system", text: txt, ts: Date.now() });
+    console.log("🎯 Rating:", { chatId: socket.id, stars, skipped });
+
+    // Agradecer
+    io.to(socket.id).emit("system_message", {
+      text: skipped
+        ? "Gracias. Tu opinión siempre suma. 🙏"
+        : `¡Gracias por calificar con ${stars}★! 🙏`,
+    });
+
+    // Volver al menú principal del bot (invocamos el flujo con "menu")
+    const { replies, session } = await handleText({
+      chatId: socket.id,
+      text: "menu",
+    });
+    replies.forEach((t) => io.to(socket.id).emit("bot_message", { text: t }));
+
+    // Botones contextuales si aplica
+    const buttons = buildButtonsForStep(session);
+    if (buttons?.length) {
+      io.to(socket.id).emit("bot_message", {
+        text: "Elegí una opción:",
+        buttons,
+      });
+    }
+  });
 
   socket.on("disconnect", () => {
     console.log("🔴 Cliente desconectado", socket.id);
