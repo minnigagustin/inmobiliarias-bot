@@ -78,6 +78,39 @@ function mapIndice(k) {
   return k ? m[k] || null : null;
 }
 
+const INDEX_KEYS = [
+  "ICL",
+  "CAC",
+  "UVA",
+  "UVI",
+  "CER",
+  "CASA_PROPIA",
+  "IPC_INDEC_1M",
+  "IPC_INDEC_2M",
+  "IPC_CREEBBA_1M",
+  "IPC_CREEBBA_2M",
+];
+
+// 1–9 (ya existe pickMenuNumber); extendemos a 1–10 con esta variante
+function pickMenuNumber10(text) {
+  const m = String(text || "")
+    .trim()
+    .match(/^(?:op(?:ci[oó]n)?\s*)?([1-9]|10)(?:\s*[\).\:]?)?$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return n >= 1 && n <= 10 ? n : null;
+}
+
+// A–Z (acepta "a", "B.", "opcion c", "D)")
+function pickLetterChoice(text, max = 26) {
+  const m = String(text || "")
+    .trim()
+    .match(/^(?:op(?:ci[oó]n)?\s*)?([a-z])(?:\s*[\).\:]?)?$/i);
+  if (!m) return null;
+  const n = m[1].toLowerCase().charCodeAt(0) - "a".charCodeAt(0) + 1;
+  return n >= 1 && n <= max ? n : null;
+}
+
 function stripAccents(s) {
   return String(s || "")
     .normalize("NFD")
@@ -184,11 +217,30 @@ function cheapDetectIntent(text) {
   )
     return { intent: "goodbye" };
 
+  // Evitar falsos positivos cuando preguntan por sellado/impuesto de sellos
+  const isStampQuestion = /\b(sellad\w*|impuesto(s)?\s+de\s+sellos?)\b/.test(t);
+
+  // Pedido de humano
   if (/(humano|operador|agente|asesor)/.test(t)) return { intent: "operator" };
+
+  // Saludo / menú
   if (/(^|\s)(hola|buenas|menu|inicio|start)(\s|$)/.test(t))
     return { intent: "greeting" };
-  if (/(inquilin)/.test(t)) return { intent: "tenant_info" };
-  if (/(propietari|dueñ)/.test(t)) return { intent: "owner_info" };
+
+  // ⚠️ Antes se activaba por cualquier "inquilino"/"propietario".
+  // Ahora solo si se IDENTIFICA o pide info explícitamente, y NO si habla de sellado.
+  if (
+    !isStampQuestion &&
+    (/\b(soy\s+)?inquilin[oa]s?\b/.test(t) ||
+      /\binfo\s+para\s+inquilin[oa]s?\b/.test(t))
+  )
+    return { intent: "tenant_info" };
+  if (
+    !isStampQuestion &&
+    (/\b(soy\s+)?propietari[oa]s?\b/.test(t) ||
+      /\binfo\s+para\s+propietari[oa]s?\b/.test(t))
+  )
+    return { intent: "owner_info" };
 
   // Cobrar (prioridad sobre “alquilar”)
   if (
@@ -206,7 +258,7 @@ function cheapDetectIntent(text) {
 
   // Problemas con verbos/señales
   if (
-    /(romp|gote|fuga|p[eé]rdida|corto|chispa|no anda|no funciona|descompuesto|perd[ií] la llave|canilla|inund)/.test(
+    /(romp|gote|fuga|p[eé]rdida|corto|chispa|no anda|no funciona|descompuesto|perd[ií]\s+la\s+llave|canilla|inund)/.test(
       t
     )
   ) {
@@ -338,9 +390,12 @@ function alquileresMenuText() {
 }
 function indicesMenuText() {
   return [
-    "Decime qué índice querés usar:",
-    "ICL, CAC, UVA, UVI, CER, Casa Propia, IPC INDEC (1 o 2 meses), IPC CREEBBA (1 o 2 meses).",
-    "Ejemplo: “ICL”, “IPC INDEC 2 meses”.",
+    "Decime qué índice querés usar (podés escribir el *nombre*, o *1–10* o *A–J*):",
+    "1) ICL   2) CAC   3) UVA   4) UVI   5) CER",
+    "6) Casa Propia",
+    "7) IPC INDEC 1 mes   8) IPC INDEC 2 meses",
+    "9) IPC CREEBBA 1 mes   10) IPC CREEBBA 2 meses",
+    "Ejemplo: “ICL”, “8”, “B”.",
   ].join("\n");
 }
 function inquilinosInfoText() {
@@ -636,6 +691,25 @@ async function handleText({ chatId, text }) {
       }
       return { replies, notifyAgent, session: s };
     }
+  }
+
+  // ===== Menú: Índices (1–10 o A–J) =====
+  if (s.step === "indices_menu") {
+    // ¿Eligió por número o letra?
+    const byNum = pickMenuNumber10(bodyRaw);
+    const byLet = pickLetterChoice(bodyRaw, 10);
+    const pos = byNum || byLet;
+
+    if (pos) {
+      const key = INDEX_KEYS[pos - 1]; // 1→index 0
+      const label = mapIndice(key) || key; // etiqueta legible
+      s.data.indice = label;
+      s.step = "ind_monto";
+      replies.push(`Perfecto, *${label}*. Ingresá el *alquiler actual*:`);
+
+      return { replies, notifyAgent, session: s };
+    }
+    // si no eligió por código, seguimos el flujo normal (NLU o texto libre)
   }
 
   // Desambiguaciones pendientes
