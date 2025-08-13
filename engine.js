@@ -1,8 +1,8 @@
 // engine.js — Core del flujo (compartido entre WhatsApp y Web Chat)
 // ✅ NLU híbrido (pre es-compromise → reglas → IA OpenAI)
-// ✅ “BR-Group está escribiendo…” lo maneja el front; aquí solo respondemos.
-// ✅ Manejo de fotos en reportes y conteo en el resumen.
-// ✅ Sí/No flexible y textos más naturales para “no”.
+// ✅ Manejo de fotos y conteo en el resumen
+// ✅ Sí/No flexible y respuestas más naturales
+// ✅ Deducción de categoría (“gas”, “plomería”, etc.) desde texto y descripción
 
 const { classifyIntent } = require("./nlp");
 const { preIntent } = require("./nlu_pre");
@@ -104,19 +104,38 @@ function isRepair(text) {
   );
 }
 
+// 🔧 Deducción de categoría por tokens simples o descripción
+function normalizeIssueCategory(v) {
+  if (!v) return null;
+  const t = String(v).toLowerCase();
+  if (/\bgas\b|metrogas|ca(?:n|ñ)o de gas/.test(t)) return "Gas";
+  if (/(electric|corto|enchufe|tablero|luz)/.test(t)) return "Electricidad";
+  if (/(plomer|canilla|agua|gote|fuga|p[eé]rdida|ca(?:n|ñ)o|inund)/.test(t))
+    return "Plomería";
+  if (
+    /(artefacto|termotan|calef[oó]n|calefactor|heladera|cocina|horno)/.test(t)
+  )
+    return "Artefacto roto";
+  if (t === "plomería" || t === "plomeria") return "Plomería";
+  if (t === "electricidad") return "Electricidad";
+  if (t === "artefacto" || t === "artefacto roto") return "Artefacto roto";
+  if (t === "otro" || t === "otros") return "Otro";
+  return null;
+}
+
 // ===== Reglas rápidas =====
 function cheapDetectIntent(text) {
   const t = text.toLowerCase();
 
   // Small talk
   if (
-    /\b(gracias|muchas gracias|mil gracias|genial|bárbaro|barbaro|perfecto|de nada)\b/.test(
+    /\b(gracias|muchas gracias|mil gracias|genial|b[áa]rbaro|perfecto|de nada)\b/.test(
       t
     )
   )
     return { intent: "thanks" };
   if (
-    /\b(chau|adios|adiós|hasta luego|nos vemos|buenas noches|buenas tardes|buen día|buen dia)\b/.test(
+    /\b(chau|adi[oó]s|hasta luego|nos vemos|buenas noches|buenas tardes|buen d[ií]a)\b/.test(
       t
     )
   )
@@ -136,9 +155,15 @@ function cheapDetectIntent(text) {
     return { intent: "owner_info" };
   }
 
-  // Problemas
+  // NUEVO: si el usuario pone solo “gas” / “plomería” / etc., consideralo reporte
+  const catLite = normalizeIssueCategory(t);
+  if (catLite && catLite !== "Otro") {
+    return { intent: "report_issue", slots: { category: catLite } };
+  }
+
+  // Problemas con verbos/señales
   if (
-    /(romp|gote|fuga|pérdida|perdida|corto|chispa|no anda|no funciona|descompuesto|perdí la llave|canilla|inund)/.test(
+    /(romp|gote|fuga|p[eé]rdida|corto|chispa|no anda|no funciona|descompuesto|perd[ií] la llave|canilla|inund)/.test(
       t
     )
   ) {
@@ -155,7 +180,7 @@ function cheapDetectIntent(text) {
   // Índices
   if (
     /(icl|cac|uva|uvi|cer|casa propia|ipc)/.test(t) ||
-    /(actualizar|indice|índice)/.test(t)
+    /(actualizar|[ií]ndice)/.test(t)
   ) {
     let idx = null;
     if (/\bicl\b/.test(t)) idx = "ICL";
@@ -180,7 +205,7 @@ function cheapDetectIntent(text) {
     return { intent: "properties_rent" };
   if (/(comprar|compra|quiero\s+comprar|busco\s+comprar)/.test(t))
     return { intent: "properties_buy" };
-  if (/(temporari|por día|por dia|por semana)/.test(t))
+  if (/(temporari|por d[ií]a|por semana)/.test(t))
     return { intent: "properties_temp" };
   if (/(vender|venta|tasaci)/.test(t)) return { intent: "properties_sell" };
 
@@ -191,7 +216,7 @@ function cheapDetectIntent(text) {
 function quickAnswer(text) {
   const t = text.toLowerCase();
   if (
-    /(horari|a qué hora|a que hora|cuándo ati|cuando ati|direcci|ubicaci|dónde están|donde estan)/.test(
+    /(horari|a qu[eé] hora|cu[aá]ndo ati|direcci|ubicaci|d[oó]nde est[aá]n)/.test(
       t
     )
   ) {
@@ -200,7 +225,7 @@ function quickAnswer(text) {
 📞 Teléfono alternativo: [Número ficticio]`;
   }
   if (
-    /(cómo pago|como pago|forma[s]? de pago|medios de pago|pagar alquil|transferencia|efectivo)/.test(
+    /(c[oó]mo pago|forma[s]? de pago|medios de pago|pagar alquil|transferencia|efectivo)/.test(
       t
     )
   ) {
@@ -211,9 +236,7 @@ function quickAnswer(text) {
 Conservá siempre el comprobante.`;
   }
   if (
-    /(tasaci|tasar|valor de mi propiedad|cuánto sale la tasación|cuanto sale la tasacion)/.test(
-      t
-    )
+    /(tasaci|tasar|valor de mi propiedad|cu[aá]nto sale la tasaci[oó]n)/.test(t)
   ) {
     return `📏 Tasación (demo):
 Coordinamos una visita sin costo para estimar el valor. ¿Querés que te contacte un asesor? Escribí *operador*.`;
@@ -233,9 +256,7 @@ Coordinamos una visita sin costo para estimar el valor. ¿Querés que te contact
     return `ℹ️ ${def}`;
   }
   if (
-    /(renovar contrato|renovación|renovacion|me atraso|pago tarde|interes|interés)/.test(
-      t
-    )
+    /(renovar contrato|renovaci[oó]n|me atraso|pago tarde|inter[eé]s)/.test(t)
   ) {
     return `📌 Renovación y atrasos (demo):
 • Renovación: gestionarla 60–90 días antes del vencimiento.
@@ -343,19 +364,17 @@ async function handleNLUIntent(nlu, s) {
       replies.push(alquileresMenuText());
       break;
 
-    case "report_issue":
-      s.data.categoria = nlu?.slots?.category
-        ? nlu.slots.category === "plomeria"
-          ? "Plomería"
-          : nlu.slots.category === "gas"
-          ? "Gas"
-          : nlu.slots.category === "electricidad"
-          ? "Electricidad"
-          : nlu.slots.category === "artefacto"
-          ? "Artefacto roto"
-          : "Otro"
-        : null;
-      if (s.data.categoria) {
+    case "report_issue": {
+      // 1) lo que dijo la IA
+      let cat = normalizeIssueCategory(nlu?.slots?.category);
+      // 2) último mensaje del usuario (por si fue “gas” suelto)
+      if (!cat || cat === "Otro") {
+        const last = (s.history && s.history[s.history.length - 1]) || "";
+        cat = normalizeIssueCategory(last) || cat;
+      }
+      s.data.categoria = cat;
+
+      if (s.data.categoria && s.data.categoria !== "Otro") {
         s.step = "rep_direccion";
         replies.push("📍 Pasame la *dirección del inmueble*:");
       } else {
@@ -365,6 +384,7 @@ async function handleNLUIntent(nlu, s) {
         );
       }
       break;
+    }
 
     case "index_update":
       s.data.indice = mapIndice(nlu?.slots?.index);
@@ -412,10 +432,11 @@ async function handleNLUIntent(nlu, s) {
         s.data.await = /cobrar|cobro/i.test(body)
           ? "owner_or_other"
           : "clarify_generic";
-      } else
+      } else {
         replies.push(
           "No me quedó claro. Por ejemplo: “se rompió la canilla”, “actualizar por ICL”, “alquilar depto en centro” o “operador”."
         );
+      }
       break;
   }
 
@@ -625,6 +646,12 @@ async function handleText({ chatId, text }) {
       break;
     }
     case "rep_desc": {
+      // 🔎 si hasta acá era “Otro”, re-intentar deducir por la descripción
+      const deduced = normalizeIssueCategory(bodyRaw);
+      if (!s.data.categoria || s.data.categoria === "Otro") {
+        if (deduced) s.data.categoria = deduced;
+      }
+
       s.data.descripcion = bodyRaw;
       s.step = "rep_derivar";
       replies.push(
@@ -846,7 +873,7 @@ ${
 
     // Consultas generales
     case "consultas_menu": {
-      if (/ubicaci|direcci|dónde|donde|horari/.test(body)) {
+      if (/ubicaci|direcci|d[oó]nde|horari/.test(body)) {
         replies.push(
           `📍 Dirección: [Dirección ficticia]
 🕒 Horarios: Lunes a viernes de 9 a 13 y de 16 a 19 hs

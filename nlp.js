@@ -1,6 +1,5 @@
 // nlp.js — Clasificador de intención con salida JSON estricta (CommonJS)
 const OpenAI = require("openai");
-
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // JSON Schema con 'required' completos (raíz y 'slots')
@@ -21,8 +20,8 @@ const schema = {
         "properties_sell",
         "operator",
         "greeting",
-        "thanks", // <-- agregado
-        "goodbye", // <-- agregado
+        "thanks",
+        "goodbye",
         "other",
       ],
     },
@@ -75,6 +74,19 @@ const schema = {
   required: ["intent", "slots", "confidence", "followup_question"],
 };
 
+function emptySlots() {
+  return {
+    category: null,
+    index: null,
+    zone: null,
+    budget: null,
+    bedrooms: null,
+    bathrooms: null,
+    garage: null,
+    description: null,
+  };
+}
+
 async function classifyIntent({ text, history = [], step = "any" }) {
   const instructions = [
     "Eres un NLU para una inmobiliaria en español (Argentina).",
@@ -84,13 +96,14 @@ async function classifyIntent({ text, history = [], step = "any" }) {
     "Si pide actualizar alquiler por índice => index_update (+index si lo nombra: ICL, CAC, UVA, UVI, CER, CASA_PROPIA, IPC INDEC/CREEBBA).",
     "Si pregunta como inquilino => tenant_info; propietario => owner_info.",
     "Si habla de alquilar/comprar/temporario/vender => properties_*.",
-    "Si pide humano => operator. Saludo simple => greeting.",
-    "Si el usuario agradece => thanks. Si se despide => goodbye.",
+    "Si pide humano => operator. Saludo simple => greeting. Agradecimiento => thanks. Despedida => goodbye.",
     "Si no alcanza, devuelve 'other' y una followup_question corta para desambiguar.",
   ].join(" ");
 
   const payload = {
     model: "gpt-4o-mini",
+    temperature: 0, // ← más determinista
+    max_output_tokens: 200, // ← suficiente para el JSON
     input: [
       { role: "developer", content: instructions },
       { role: "user", content: JSON.stringify({ text, history, step }) },
@@ -105,28 +118,26 @@ async function classifyIntent({ text, history = [], step = "any" }) {
     },
   };
 
-  const res = await client.responses.create(payload);
+  try {
+    const res = await client.responses.create(payload);
 
-  // Extraer el JSON devuelto como texto
-  let txt = "";
-  if (typeof res.output_text === "string" && res.output_text.trim()) {
-    txt = res.output_text;
-  } else if (Array.isArray(res.output) && res.output.length) {
-    try {
+    let txt = "";
+    if (typeof res.output_text === "string" && res.output_text.trim()) {
+      txt = res.output_text;
+    } else if (Array.isArray(res.output) && res.output.length) {
       const first = res.output[0];
       const c = first?.content?.[0];
       txt = (c?.text || "").trim();
-    } catch (_) {}
-  }
+    }
 
-  if (txt && typeof txt === "string") txt = txt.replace(/^\uFEFF/, "").trim();
-
-  try {
+    if (txt && typeof txt === "string") txt = txt.replace(/^\uFEFF/, "").trim();
     return JSON.parse(txt);
-  } catch {
+  } catch (err) {
+    // Fallback seguro ante cualquier error de API/parsing
+    console.error("NLU error:", err?.message || err);
     return {
       intent: "other",
-      slots: {},
+      slots: emptySlots(),
       confidence: 0,
       followup_question: "¿Podés contarme un poco más?",
     };
