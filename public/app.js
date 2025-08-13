@@ -1,3 +1,6 @@
+// public/app.js
+/* Chat web BR-Group: soporte de handoff humano con banner y “finalizar” */
+
 const socket = io();
 
 const messagesEl = document.getElementById("messages");
@@ -6,6 +9,10 @@ const input = document.getElementById("input");
 const attachBtn = document.getElementById("attach-btn");
 const fileInput = document.getElementById("file-input");
 
+// Flag de handoff (cuando hay agente humano)
+let humanMode = false;
+
+/* ------------------------- Utilidades UI ------------------------- */
 function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -36,7 +43,17 @@ function addImage(src, who = "user") {
   scrollToBottom();
 }
 
+function disableAllChoiceButtons() {
+  document.querySelectorAll(".choice-btn").forEach((b) => (b.disabled = true));
+  document
+    .querySelectorAll(".btn-group")
+    .forEach((g) => g.classList.add("used"));
+}
+
 function addButtons(buttons) {
+  // En modo humano NO mostramos botones del bot
+  if (humanMode) return;
+
   const wrap = document.createElement("div");
   wrap.className = "msg"; // mensaje del bot
   const bubble = document.createElement("div");
@@ -52,17 +69,17 @@ function addButtons(buttons) {
     btn.textContent = b.label || b.value;
     btn.setAttribute("data-value", b.value);
     btn.addEventListener("click", () => {
-      // Al elegir, enviamos como si el usuario escribiera
       const value = btn.getAttribute("data-value") || btn.textContent;
-      // feedback visual: deshabilitar/remover botones
+      // feedback visual
       [...group.querySelectorAll("button")].forEach((x) => (x.disabled = true));
       group.classList.add("used");
 
       addMessage(btn.textContent, "user");
-      startTypingTimer();
+
+      // En modo humano no mostramos “escribiendo…”
+      if (!humanMode) startTypingTimer();
       socket.emit("user_message", { text: value });
 
-      // opcional: retirar completamente el grupo
       wrap.remove();
     });
     group.appendChild(btn);
@@ -74,7 +91,7 @@ function addButtons(buttons) {
   scrollToBottom();
 }
 
-/* ---------- Typing indicator ---------- */
+/* --------------------- Indicador de escritura -------------------- */
 let typingTimer = null;
 function showTyping() {
   if (document.querySelector(".msg.typing")) return;
@@ -100,13 +117,71 @@ function stopTyping() {
   hideTyping();
 }
 
-/* ---------- Sockets ---------- */
+/* --------------------- Banner modo agente (UI) ------------------- */
+let humanBanner = null;
+function ensureBanner() {
+  if (humanBanner) return humanBanner;
+
+  humanBanner = document.createElement("div");
+  humanBanner.id = "human-banner";
+  humanBanner.style.padding = "10px 14px";
+  humanBanner.style.background = "rgba(34,211,238,.12)";
+  humanBanner.style.borderBottom = "1px solid rgba(34,211,238,.35)";
+  humanBanner.style.fontWeight = "600";
+  humanBanner.style.display = "none";
+  humanBanner.style.display = "none";
+
+  // Botón “Finalizar conversación”
+  const endBtn = document.createElement("button");
+  endBtn.id = "end-conv";
+  endBtn.textContent = "Finalizar conversación";
+  endBtn.style.marginLeft = "10px";
+  endBtn.style.padding = "6px 10px";
+  endBtn.style.border = "none";
+  endBtn.style.borderRadius = "8px";
+  endBtn.style.background = "var(--accent)";
+  endBtn.style.color = "#001219";
+  endBtn.style.fontWeight = "800";
+  endBtn.style.cursor = "pointer";
+  endBtn.addEventListener("click", () => {
+    endBtn.disabled = true; // evita dobles clicks
+    socket.emit("user_finish");
+  });
+
+  humanBanner.appendChild(
+    document.createTextNode("👤 Estás chateando con un agente.")
+  );
+  humanBanner.appendChild(endBtn);
+
+  // Insertar el banner arriba de la lista de mensajes
+  const container = document.querySelector(".chat-container") || document.body;
+  container.insertBefore(
+    humanBanner,
+    container.firstChild.nextSibling || messagesEl
+  );
+
+  return humanBanner;
+}
+function showHumanBanner(agentName) {
+  const banner = ensureBanner();
+  banner.firstChild.textContent = `👤 Estás chateando con ${
+    agentName || "un agente"
+  }. `;
+  banner.style.display = "block";
+}
+function hideHumanBanner() {
+  if (!humanBanner) return;
+  // Habilitar de nuevo el botón finalizar por si lo deshabilitamos
+  const endBtn = humanBanner.querySelector("#end-conv");
+  if (endBtn) endBtn.disabled = false;
+  humanBanner.style.display = "none";
+}
+
+/* --------------------------- Sockets ----------------------------- */
 socket.on("bot_message", (msg) => {
   stopTyping();
   if (msg.text) addMessage(msg.text, "bot");
-  if (msg.buttons && Array.isArray(msg.buttons) && msg.buttons.length) {
-    addButtons(msg.buttons);
-  }
+  if (Array.isArray(msg.buttons) && msg.buttons.length) addButtons(msg.buttons);
 });
 
 socket.on("system_message", (msg) => {
@@ -114,36 +189,61 @@ socket.on("system_message", (msg) => {
   addMessage(msg.text, "system");
 });
 
-/* ---------- Envío de texto ---------- */
+// Cuando el agente envía un mensaje
+socket.on("agent_message", (msg) => {
+  stopTyping();
+  if (msg.text) addMessage(msg.text, "bot"); // podés crear un estilo “agent” si querés diferenciar
+});
+
+// Handoff: el server nos avisa que un agente tomó el caso
+socket.on("agent_assigned", ({ agent }) => {
+  humanMode = true;
+  stopTyping();
+  disableAllChoiceButtons();
+  showHumanBanner(agent);
+});
+
+// Handoff: el server avisa que terminó el chat con agente
+socket.on("agent_finished", () => {
+  humanMode = false;
+  hideHumanBanner();
+  stopTyping();
+});
+
+/* -------------------- Envío de texto del user -------------------- */
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
+
   addMessage(text, "user");
-  startTypingTimer();
+  if (!humanMode) startTypingTimer(); // en modo humano no mostramos “escribiendo…”
   socket.emit("user_message", { text });
   input.value = "";
   input.focus();
 });
 
-/* ---------- Adjuntar foto ---------- */
+/* ----------------------- Adjuntar foto --------------------------- */
 attachBtn.addEventListener("click", () => fileInput.click());
 
 fileInput.addEventListener("change", () => {
-  const file = fileInput.files && fileInput.files[0];
-  if (!file) return;
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = reader.result; // base64 data URL
-    addImage(dataUrl, "user"); // preview inmediato
-    startTypingTimer();
-    socket.emit("user_image", {
-      name: file.name,
-      type: file.type,
-      data: dataUrl,
-    });
-    fileInput.value = "";
-  };
-  reader.readAsDataURL(file);
+  files.forEach((file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      addImage(dataUrl, "user");
+      if (!humanMode) startTypingTimer();
+      socket.emit("user_image", {
+        name: file.name,
+        type: file.type,
+        data: dataUrl,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
+  fileInput.value = "";
 });

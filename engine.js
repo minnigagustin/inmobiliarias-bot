@@ -96,6 +96,18 @@ function parseYesNo(text) {
   return null;
 }
 
+function resumenReporte(s) {
+  return `✅ ¡Gracias! Registré:
+• Categoría: ${s.data.categoria}
+• Dirección: ${s.data.direccion}
+• Descripción: ${s.data.descripcion}
+${
+  s.data.fotos && s.data.fotos.length
+    ? `• Fotos: ${s.data.fotos.length}`
+    : "• Fotos: no enviadas"
+}`;
+}
+
 function pickMenuNumber(text, max = 9) {
   const m = String(text || "")
     .trim()
@@ -463,6 +475,14 @@ async function handleImage({ chatId, file }) {
   s.data.fotos.push(file); // {url, type, name}
 
   const replies = [];
+
+  if (s.step === "rep_fotos_subida") {
+    replies.push(
+      "📸 ¡Foto recibida! Podés enviar otra. Cuando termines, escribí *listo*."
+    );
+    return { replies, session: s };
+  }
+
   if (
     ["rep_categoria", "rep_direccion", "rep_desc", "rep_derivar"].includes(
       s.step
@@ -478,6 +498,7 @@ async function handleImage({ chatId, file }) {
   } else {
     replies.push("📸 ¡Gracias por la imagen!");
   }
+
   return { replies, session: s };
 }
 
@@ -728,27 +749,51 @@ async function handleText({ chatId, text }) {
       break;
     }
     case "rep_desc": {
-      // 🔎 si hasta acá era “Otro”, re-intentar deducir por la descripción
+      // si hasta acá era “Otro”, re-intentar deducir por la descripción
       const deduced = normalizeIssueCategory(bodyRaw);
       if (!s.data.categoria || s.data.categoria === "Otro") {
         if (deduced) s.data.categoria = deduced;
       }
 
       s.data.descripcion = bodyRaw;
-      s.step = "rep_derivar";
-      replies.push(
-        `✅ ¡Gracias! Registré:
-• Categoría: ${s.data.categoria}
-• Dirección: ${s.data.direccion}
-• Descripción: ${s.data.descripcion}
-${
-  s.data.fotos && s.data.fotos.length
-    ? `• Fotos: ${s.data.fotos.length}`
-    : "• Fotos: no enviadas"
-}
-
-¿Querés que te atienda alguien del equipo? (sí/no)`
-      );
+      s.step = "rep_fotos_preg"; // 👈 pasamos a preguntar por fotos
+      replies.push("📷 ¿Tenés fotos para adjuntar? (sí/no)");
+      break;
+    }
+    case "rep_fotos_preg": {
+      const yn = parseYesNo(bodyRaw);
+      if (yn === "yes") {
+        s.step = "rep_fotos_subida";
+        replies.push(
+          "Perfecto. Adjuntá la(s) foto(s). Cuando termines, escribí *listo*."
+        );
+      } else if (yn === "no") {
+        s.step = "rep_derivar";
+        replies.push(
+          `${resumenReporte(
+            s
+          )}\n\n¿Querés que te atienda alguien del equipo? (sí/no)`
+        );
+      } else {
+        replies.push('Respondé "sí" o "no", por favor.');
+      }
+      break;
+    }
+    case "rep_fotos_subida": {
+      // si el usuario escribe “listo/ya/ok”, cerramos este paso
+      if (/^(listo|lista|ya|ok|de una|dale)$/i.test(bodyRaw.trim())) {
+        s.step = "rep_derivar";
+        replies.push(
+          `${resumenReporte(
+            s
+          )}\n\n¿Querés que te atienda alguien del equipo? (sí/no)`
+        );
+      } else {
+        // cualquier otro texto: recordatorio amable
+        replies.push(
+          "Podés adjuntar fotos ahora. Cuando termines, escribí *listo*."
+        );
+      }
       break;
     }
     case "rep_derivar": {
