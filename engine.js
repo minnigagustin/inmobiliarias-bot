@@ -15,7 +15,10 @@ function getSession(chatId) {
   return sessions.get(chatId);
 }
 function reset(chatId) {
-  sessions.set(chatId, { step: "start", data: {}, history: [] });
+  const s = getSession(chatId); // ← usa el existente
+  s.step = "start";
+  s.data = {};
+  s.history = [];
 }
 function pushHistory(s, text) {
   s.history = s.history || [];
@@ -116,6 +119,15 @@ ${
     ? `• Fotos: ${s.data.fotos.length}`
     : "• Fotos: no enviadas"
 }`;
+}
+
+function resumenVenta(s) {
+  const p = s.data.prop || {};
+  return `📄 Datos para vender:
+• Tipo: ${p.tipo || "-"}
+• Dirección/Zona: ${p.direccion || "-"}
+• Estado: ${p.estado || "-"}
+• Comentarios: ${p.comentarios ? p.comentarios : "—"}`;
 }
 
 function pickMenuNumber(text, max = 9) {
@@ -962,6 +974,57 @@ async function handleText({ chatId, text }) {
       replies.push(
         "🧩 Comodidades (ej: balcón, patio, parrilla). Podés listar varias:"
       );
+      break;
+    }
+    // --------- Venta de propiedad ---------
+    case "prop_vender_tipo": {
+      s.data.prop = { op: "vender", tipo: bodyRaw };
+      s.step = "prop_vender_dir";
+      replies.push("📍 Pasame *dirección aproximada o zona* del inmueble:");
+      break;
+    }
+    case "prop_vender_dir": {
+      s.data.prop.direccion = bodyRaw;
+      s.step = "prop_vender_estado";
+      replies.push(
+        "🏷️ ¿*Estado general*? (ej.: a refaccionar, bueno, muy bueno/reciclado, a estrenar)"
+      );
+      break;
+    }
+    case "prop_vender_estado": {
+      s.data.prop.estado = capitalize(bodyRaw);
+      s.step = "prop_vender_comentarios";
+      replies.push(
+        "🧾 *Comentarios adicionales* (m², antigüedad, amenities). Si no tenés, escribí *listo*."
+      );
+      break;
+    }
+    case "prop_vender_comentarios": {
+      if (!/^listo|lista$/i.test(bodyRaw.trim())) {
+        s.data.prop.comentarios = bodyRaw;
+      }
+      s.step = "prop_vender_derivar";
+      replies.push(
+        `${resumenVenta(
+          s
+        )}\n\n¿Querés que un asesor te contacte para coordinar *tasación*? (sí/no)`
+      );
+      break;
+    }
+    case "prop_vender_derivar": {
+      const yn = parseYesNo(bodyRaw);
+      if (yn === "yes") {
+        notifyAgent = { motivo: "Vender propiedad", propform: s.data.prop };
+        replies.push("👤 Te derivo con un integrante del equipo. ¡Gracias!");
+        reset(chatId);
+      } else if (yn === "no") {
+        replies.push(
+          "👍 Perfecto. Si necesitás algo más, escribí *menu* para volver al inicio."
+        );
+        reset(chatId);
+      } else {
+        replies.push('Respondé "sí" o "no", por favor.');
+      }
       break;
     }
     case "prop_comodidades": {

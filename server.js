@@ -57,6 +57,11 @@ function buildButtonsForStep(session) {
         { label: "Sí", value: "sí" },
         { label: "No", value: "no" },
       ];
+    case "prop_vender_derivar":
+      return [
+        { label: "Sí", value: "sí" },
+        { label: "No", value: "no" },
+      ];
     case "rep_fotos_preg": // 👈 NUEVO
       return [
         { label: "Sí", value: "sí" },
