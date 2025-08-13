@@ -144,4 +144,45 @@ async function classifyIntent({ text, history = [], step = "any" }) {
   }
 }
 
-module.exports = { classifyIntent };
+async function answerFAQ({ text, history = [], step = "any" }) {
+  const sys = [
+    "Eres un asistente de una inmobiliaria argentina.",
+    "Responde en español rioplatense, claro y conciso (máx. 6–8 líneas).",
+    "No des asesoramiento legal/contable; aclara cuando corresponda.",
+    "Si no tenés certeza, decilo y ofrece derivar a un asesor.",
+  ].join(" ");
+
+  const chat = [
+    { role: "system", content: sys },
+    {
+      role: "user",
+      content: JSON.stringify({
+        pregunta: text,
+        historial: history.slice(-6),
+        step,
+      }),
+    },
+  ];
+
+  const res = await client.responses.create({
+    model: "gpt-4o-mini",
+    temperature: 0.2,
+    max_output_tokens: 350,
+    input: chat,
+  });
+
+  let out = "";
+  if (typeof res.output_text === "string" && res.output_text.trim()) {
+    out = res.output_text.trim();
+  } else if (Array.isArray(res.output) && res.output.length) {
+    out = (res.output[0]?.content?.[0]?.text || "").trim();
+  }
+
+  // fallback
+  if (!out)
+    out =
+      "Puedo ayudarte con información general. ¿Qué detalle te interesa exactamente?";
+  return out;
+}
+
+module.exports = { classifyIntent, answerFAQ };

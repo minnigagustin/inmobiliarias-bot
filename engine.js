@@ -4,7 +4,7 @@
 // ✅ Sí/No flexible y respuestas más naturales
 // ✅ Deducción de categoría (“gas”, “plomería”, etc.) desde texto y descripción
 
-const { classifyIntent } = require("./nlp");
+const { classifyIntent, answerFAQ } = require("./nlp");
 const { preIntent } = require("./nlu_pre");
 
 // ===== Estado =====
@@ -695,14 +695,13 @@ async function handleText({ chatId, text }) {
 
   // ===== Menú: Índices (1–10 o A–J) =====
   if (s.step === "indices_menu") {
-    // ¿Eligió por número o letra?
     const byNum = pickMenuNumber10(bodyRaw);
     const byLet = pickLetterChoice(bodyRaw, 10);
     const pos = byNum || byLet;
 
     if (pos) {
-      const key = INDEX_KEYS[pos - 1]; // 1→index 0
-      const label = mapIndice(key) || key; // etiqueta legible
+      const key = INDEX_KEYS[pos - 1];
+      const label = mapIndice(key) || key;
       s.data.indice = label;
       s.step = "ind_monto";
       replies.push(`Perfecto, *${label}*. Ingresá el *alquiler actual*:`);
@@ -745,28 +744,27 @@ async function handleText({ chatId, text }) {
     }
   }
 
-  // Mini-FAQ
+  // Mini-FAQ rápida (reglas)
   const quick = quickAnswer(bodyRaw);
   if (quick) {
     replies.push(quick);
     return { replies, notifyAgent, session: s };
   }
 
-  // NLU (no en formularios)
-  // en handleText, antes del bloque NLU:
+  // Formularios donde NO queremos NLU
   const expectingNumeric = [
     "ind_monto",
     "ind_inicial",
     "ind_final",
     "prop_dorm",
     "prop_banos",
-    "rep_categoria", // 👈 AGREGAR ESTA LÍNEA
+    "rep_categoria",
   ].includes(s.step);
 
   const canUseNLU = NLU_STEPS.has(s.step);
 
   if (!expectingNumeric && canUseNLU) {
-    // pre-NLU
+    // --------- Capa pre-NLU ---------
     const pre = preIntent(bodyRaw);
     if (pre && pre.intent) {
       const res = await handleNLUIntent(
@@ -794,7 +792,7 @@ async function handleText({ chatId, text }) {
       }
     }
 
-    // reglas
+    // --------- Reglas rápidas ---------
     const cheap = cheapDetectIntent(bodyRaw);
     if (cheap) {
       const res = await handleNLUIntent(
@@ -806,27 +804,69 @@ async function handleText({ chatId, text }) {
       return { replies, notifyAgent, session: s };
     }
 
-    // IA
+    // --------- IA (NLU + fallback QA) ---------
     const nlu = await classifyIntent({
       text: bodyRaw,
       history: s.history,
       step: s.step,
     });
+
     if (nlu && nlu.intent) {
+      // 🔺 Escalada a QA generativa si 'other' se repite o si parece pregunta
+      const isQuestion =
+        /[?]|(^|\s)(c[oó]mo|como|qu[eé]|que|qui[eé]n|quien|cu[aá]ndo|cuando|d[oó]nde|donde|por ?qu[eé]|por que|cu[aá]l|cual|cu[aá]nt[oa]s?|cuanto)/i.test(
+          bodyRaw
+        );
+
+      if (nlu.intent === "other") {
+        s.data.otherStreak = (s.data.otherStreak || 0) + 1;
+
+        // 1ra vez: si trae followup, preguntamos y esperamos
+        if (s.data.otherStreak === 1 && nlu.followup_question) {
+          replies.push(nlu.followup_question);
+          s.data.await = "clarify_generic";
+          return { replies, notifyAgent, session: s };
+        }
+
+        // Condición de escalada: 2+ 'other' seguidos o pregunta clara + cooldown
+        const now = Date.now();
+        const cooldownOk = !s.data.lastAI || now - s.data.lastAI > 15000;
+        if ((s.data.otherStreak >= 2 || isQuestion) && cooldownOk) {
+          const ai = await answerFAQ({
+            text: bodyRaw,
+            history: s.history,
+            step: s.step,
+          });
+          replies.push(ai);
+          replies.push("¿Querés que un asesor te contacte? (sí/no)");
+          s.data.otherStreak = 0;
+          s.data.lastAI = now;
+          s.step = "consultas_menu"; // o mantené el step si preferís
+          return { replies, notifyAgent, session: s };
+        }
+      } else {
+        // cualquier intent distinto resetea el streak
+        s.data.otherStreak = 0;
+      }
+
+      // Flujo normal cuando no escalamos
       const res = await handleNLUIntent(nlu, s);
       replies.push(...res.replies);
       notifyAgent = res.notifyAgent || notifyAgent;
+
       if (
         nlu.intent === "other" &&
         nlu.followup_question &&
         /cobrar|cobro/i.test(nlu.followup_question)
-      )
+      ) {
         s.data.await = "owner_or_other";
+      }
+
       return { replies, notifyAgent, session: s };
     }
   }
 
-  // FSM clásica
+  // ===== FSM clásica =====
   switch (s.step) {
     case "start":
       replies.push(mainMenuText());
@@ -846,7 +886,7 @@ async function handleText({ chatId, text }) {
         4: "Artefacto roto",
         5: "Otro",
       };
-      s.data.categoria = map[body] || capitalize(bodyRaw); // funciona con "1" ó "plomería"
+      s.data.categoria = map[body] || capitalize(bodyRaw);
       s.step = "rep_direccion";
       replies.push("📍 Pasame la *dirección del inmueble*:");
       break;
@@ -955,11 +995,11 @@ async function handleText({ chatId, text }) {
       const v = num(bodyRaw);
       if (!v || v <= 0) replies.push("Valor inválido. Probá de nuevo.");
       else {
-        s.data.ind_val_final = v;
-        const factor = s.data.ind_val_final / s.data.ind_val_inicial;
+        const factor = v / s.data.ind_val_inicial;
         const variacionPct = (factor - 1) * 100;
         const nuevo = s.data.monto * factor;
         s.step = "ind_derivar";
+        s.data.ind_val_final = v;
         s.data.calculo = `Factor: ${factor.toFixed(6)} (${variacionPct.toFixed(
           2
         )} %), Nuevo: ${fmtCurrency(nuevo)}`;
@@ -1050,6 +1090,7 @@ async function handleText({ chatId, text }) {
       );
       break;
     }
+
     // --------- Venta de propiedad ---------
     case "prop_vender_tipo": {
       s.data.prop = { op: "vender", tipo: bodyRaw };
