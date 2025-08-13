@@ -96,6 +96,15 @@ function parseYesNo(text) {
   return null;
 }
 
+function pickMenuNumber(text, max = 9) {
+  const m = String(text || "")
+    .trim()
+    .match(/^(?:op(?:ci[oó]n)?\s*)?([1-9])(?:\s*[\).\:]?)?$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return n >= 1 && n <= max ? n : null;
+}
+
 // Reparación / disculpa
 function isRepair(text) {
   const t = String(text || "").toLowerCase();
@@ -268,25 +277,29 @@ Coordinamos una visita sin costo para estimar el valor. ¿Querés que te contact
 // ===== Textos =====
 function mainMenuText() {
   return [
-    "👋 Hola, soy el asistente virtual de BR-Group.",
-    "Podés escribir con tus palabras, sin números. Ejemplos:",
-    "• “se rompió la canilla del baño”",
-    "• “quiero actualizar el alquiler por ICL”",
-    "• “busco depto para alquilar en el centro”",
-    "• “soy propietario, ¿cómo cobro?”",
-    "• “hablar con un humano”",
+    "👋 Hola, soy el asistente virtual de BR-Group Soluciones en Tecnología.",
+    "Podés probar cómo funciona nuestro bot para inmobiliarias.",
     "",
-    "Si preferís, también entendemos: alquileres / propiedades / consultas.",
+    "¿En qué podemos ayudarte hoy?",
+    "Opciones principales:",
+    "1. Administración de alquileres",
+    "2. Consulta de propiedades",
+    "3. Consultas generales",
+    "",
+    "Tip: podés escribir con tus palabras (“se rompió la canilla”, “actualizar por ICL”…)",
+    "o simplemente el número (ej.: 1, 2 o 3).",
   ].join("\n");
 }
 function alquileresMenuText() {
   return [
-    "Opciones de administración de alquileres (escribí en lenguaje natural):",
-    "• Reportar un problema o rotura (ej. “gotea la canilla”, “fuga de gas”).",
-    "• Consultar actualización por índice (ICL, CAC, UVA/UVI, CER, Casa Propia, IPC).",
-    "• Información para inquilinos.",
-    "• Información para propietarios.",
-    "• Hablar con un humano.",
+    "Opciones de administración de alquileres:",
+    "1. Reportar un problema o rotura",
+    "2. Actualizar alquiler por índice (ICL, CAC, UVA/UVI, CER, Casa Propia, IPC)",
+    "3. Información para inquilinos",
+    "4. Información para propietarios",
+    "5. Hablar con un humano",
+    "",
+    "También podés describirlo con tus palabras (ej.: “fuga de gas”, “ICL”).",
   ].join("\n");
 }
 function indicesMenuText() {
@@ -469,6 +482,7 @@ async function handleImage({ chatId, file }) {
 }
 
 // ===== Main handleText =====
+// ===== Main handleText (con soporte de menús numéricos 1–3 y 1–5) =====
 async function handleText({ chatId, text }) {
   const s = getSession(chatId);
   pushHistory(s, text);
@@ -477,6 +491,16 @@ async function handleText({ chatId, text }) {
   const body = bodyRaw.toLowerCase();
   const replies = [];
   let notifyAgent = null;
+
+  // Helper local: detectar "1", "2", "3", "opcion 2.", etc.
+  function pickMenuNumberLocal(src, max = 9) {
+    const m = String(src || "")
+      .trim()
+      .match(/^(?:op(?:ci[oó]n)?\s*)?([1-9])(?:\s*[\).\:]?)?$/i);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return n >= 1 && n <= max ? n : null;
+  }
 
   // Atajos
   if (["menu", "inicio", "start", "/start"].includes(body)) {
@@ -499,6 +523,61 @@ async function handleText({ chatId, text }) {
     );
     replies.push(mainMenuText());
     return { replies, notifyAgent, session: s };
+  }
+
+  // ===== Menú numérico: Principal (1–3) =====
+  if (s.step === "start" || s.step === "main") {
+    const nMain = pickMenuNumberLocal(bodyRaw, 3);
+    if (nMain) {
+      if (nMain === 1) {
+        s.step = "alquileres_menu";
+        replies.push(alquileresMenuText());
+      } else if (nMain === 2) {
+        s.step = "prop_menu";
+        replies.push(
+          "Contame si querés alquilar, comprar, temporario o vender; y el tipo (casa, depto, ph, etc.)."
+        );
+      } else if (nMain === 3) {
+        s.step = "consultas_menu";
+        replies.push(
+          'Contame tu consulta o escribí "operador" para hablar con alguien del equipo.'
+        );
+      }
+      return { replies, notifyAgent, session: s };
+    }
+  }
+
+  // ===== Menú numérico: Alquileres (1–5) =====
+  if (s.step === "alquileres_menu") {
+    const nAlq = pickMenuNumberLocal(bodyRaw, 5);
+    if (nAlq) {
+      switch (nAlq) {
+        case 1: // Reportar problema
+          s.data.categoria = null;
+          s.step = "rep_categoria";
+          replies.push(
+            "¿Qué tipo de problema es? (Plomería, Gas, Electricidad, Artefacto roto u Otro)"
+          );
+          break;
+        case 2: // Índices
+          s.step = "indices_menu";
+          replies.push(indicesMenuText());
+          break;
+        case 3: // Info inquilinos
+          replies.push(inquilinosInfoText());
+          replies.push(alquileresMenuText());
+          break;
+        case 4: // Info propietarios
+          replies.push(propietariosInfoText());
+          replies.push(alquileresMenuText());
+          break;
+        case 5: // Humano
+          replies.push("👤 Te derivo con un integrante del equipo. (Demo).");
+          notifyAgent = { motivo: "Pedido de operador (número)" };
+          break;
+      }
+      return { replies, notifyAgent, session: s };
+    }
   }
 
   // Desambiguaciones pendientes
