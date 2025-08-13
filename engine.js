@@ -621,13 +621,16 @@ async function handleText({ chatId, text }) {
   }
 
   // NLU (no en formularios)
+  // en handleText, antes del bloque NLU:
   const expectingNumeric = [
     "ind_monto",
     "ind_inicial",
     "ind_final",
     "prop_dorm",
     "prop_banos",
+    "rep_categoria", // 👈 AGREGAR ESTA LÍNEA
   ].includes(s.step);
+
   const canUseNLU = NLU_STEPS.has(s.step);
 
   if (!expectingNumeric && canUseNLU) {
@@ -711,7 +714,7 @@ async function handleText({ chatId, text }) {
         4: "Artefacto roto",
         5: "Otro",
       };
-      s.data.categoria = map[body] || capitalize(bodyRaw);
+      s.data.categoria = map[body] || capitalize(bodyRaw); // funciona con "1" ó "plomería"
       s.step = "rep_direccion";
       replies.push("📍 Pasame la *dirección del inmueble*:");
       break;

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BR-Group – Panel de Agentes</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    /* estilos mínimos para la tabla del panel */
+    .admin-wrap { max-width: 1000px; margin: 28px auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 0 0 14px; }
+    table { width: 100%; border-collapse: collapse; background: rgba(15,20,42,.65); }
+    th, td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); vertical-align: top; }
+    th { text-align: left; color: var(--text-dim); font-weight: 600; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.15); }
+    .actions button { padding:6px 10px; border: none; border-radius: 8px; background: var(--accent); color: #001219; font-weight:700; cursor:pointer; }
+    .muted { color: var(--text-dim); font-size: 12px; }
+    .topbar { display:flex; justify-content: space-between; align-items:center; margin-bottom: 10px;}
+    .topbar input { background:#0a1022; color:var(--text); border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:8px 10px; }
+  </style>
+</head>
+<body>
+  <div class="admin-wrap">
+    <div class="topbar">
+      <h1>🧑‍💻 Cola de atención</h1>
+      <div>
+        <input id="agentName" placeholder="Tu nombre de agente" />
+      </div>
+    </div>
+
+    <table id="queue">
+      <thead>
+        <tr>
+          <th>Desde</th>
+          <th>Resumen</th>
+          <th>Chat ID</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody id="queue-body"></tbody>
+    </table>
+
+    <p class="muted">Sugerencia: abrí el chat del usuario en otra pestaña para ver su conversación. Este panel es sólo la cola.</p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Conectar al namespace /admin con token (si existe)
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token') || '';
+    const adminSocket = io('/admin', { auth: { token } });
+
+    const bodyEl = document.getElementById('queue-body');
+    const agentNameEl = document.getElementById('agentName');
+
+    function since(ts) {
+      const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
+      if (s < 60) return s + 's';
+      const m = Math.round(s/60);
+      if (m < 60) return m + 'm';
+      const h = Math.round(m/60);
+      return h + 'h';
+    }
+
+    function summarize(payload) {
+      // Viene con distintas formas según el caso
+      // 1) Reporte con fotos/categoría
+      if (payload.categoria || payload.direccion || payload.descripcion) {
+        const parts = [];
+        if (payload.categoria) parts.push('🛠 ' + payload.categoria);
+        if (payload.direccion) parts.push('📍 ' + payload.direccion);
+        if (payload.descripcion) parts.push('📝 ' + payload.descripcion);
+        if (payload.fotos?.length) parts.push('📸 ' + payload.fotos.length + ' foto(s)');
+        return parts.join(' · ');
+      }
+      // 2) Índices
+      if (payload.indice || payload.calculo) {
+        return `📈 ${payload.indice || 'Índice'} · ${payload.calculo || ''}`;
+      }
+      // 3) Propiedades
+      if (payload.propform) {
+        const p = payload.propform;
+        return `🏠 ${p.op || 'consulta'} – ${p.tipo || ''} · ${p.zona || ''} · ${p.dorm||0}D/${p.banos||0}B · Cochera: ${p.cochera||'No'}`;
+      }
+      // 4) Pedido genérico
+      if (payload.motivo) return 'ℹ️ ' + payload.motivo;
+      return 'Nueva consulta';
+    }
+
+    function rowId(chatId) { return 'row-' + chatId.replace(/[^a-z0-9_-]/gi, '_'); }
+
+    function addRow(rec) {
+      const tr = document.createElement('tr');
+      tr.id = rowId(rec.chatId);
+      tr.innerHTML = `
+        <td><span class="pill">${since(rec.since)}</span></td>
+        <td>${summarize(rec.payload)}</td>
+        <td><code>${rec.chatId}</code></td>
+        <td class="actions"><button data-chat="${rec.chatId}">Tomar</button></td>
+      `;
+      tr.querySelector('button').addEventListener('click', (e) => {
+        const chatId = e.currentTarget.getAttribute('data-chat');
+        const agent = agentNameEl.value.trim() || 'Agente';
+        adminSocket.emit('assign', { chatId, agent });
+      });
+      bodyEl.appendChild(tr);
+    }
+
+    function removeRow(chatId) {
+      const tr = document.getElementById(rowId(chatId));
+      if (tr) tr.remove();
+    }
+
+    // Socket listeners
+    adminSocket.on('connect_error', (err) => {
+      alert('Error de conexión al panel: ' + err.message);
+    });
+
+    adminSocket.on('queue_snapshot', (items) => {
+      bodyEl.innerHTML = '';
+      (items || []).forEach(addRow);
+    });
+
+    adminSocket.on('queue_add', (rec) => addRow(rec));
+    adminSocket.on('queue_remove', ({ chatId }) => removeRow(chatId));
+  </script>
+</body>
+</html>
