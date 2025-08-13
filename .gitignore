@@ -1,0 +1,52 @@
+# ── Node / paquetes ────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Builds / cachés / coverage ─────────────────────────────────────────────────
+dist/
+build/
+coverage/
+.nyc_output/
+.cache/
+.tmp/
+
+# ── Sistema / editores ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ── Env / credenciales ─────────────────────────────────────────────────────────
+.env
+.env.*.local
+*.env
+
+# ── Logs / PIDs ────────────────────────────────────────────────────────────────
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# ── Subida de archivos del chat web ────────────────────────────────────────────
+public/uploads/*
+!public/uploads/.gitkeep
+
+# ── Sesiones de whatsapp-web.js (LocalAuth) ────────────────────────────────────
+.wwebjs_auth/
+.wwebjs_cache/
+.wwebjs_session/
+session/
+sessions/
+
+# ── Datos locales / sqlite opcional ────────────────────────────────────────────
+data/
+*.sqlite
+*.db
+*.db-journal

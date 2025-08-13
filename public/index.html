@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BR-Group – Chat Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="chat-container">
+      <header>🤖 Asistente BR-Group</header>
+
+      <main id="messages"></main>
+
+      <form id="input-form">
+        <button type="button" id="attach-btn" class="icon-btn" title="Enviar foto" aria-label="Enviar foto">📷</button>
+        <input id="file-input" type="file" accept="image/*" hidden />
+        <input id="input" autocomplete="off" placeholder="Escribí tu mensaje…" />
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

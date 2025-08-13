@@ -1,0 +1,24 @@
+{
+  "name": "bot-whatsapp-nlu",
+  "version": "1.0.0",
+  "description": "Bot inmobiliario con whatsapp-web.js + NLU (OpenAI) y flujo natural en español.",
+  "main": "index.js",
+  "scripts": {
+    "start:web": "node server.js",
+    "start:wa": "node index.js",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "es-compromise": "^0.2.11",
+    "express": "^4.19.2",
+    "lodash.deburr": "^4.1.0",
+    "openai": "^4.58.1",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.7.5",
+    "whatsapp-web.js": "^1.23.0"
+  }
+}
