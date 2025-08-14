@@ -55,6 +55,48 @@ const REPORT_STEPS = new Set([
   "rep_derivar",
 ]);
 
+// ==== AI mode (Consultas Generales) ====
+const AI_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutos
+
+function isAIMode(s) {
+  return s.step === "consultas_ia" && s.data?.ai?.active;
+}
+function enterAIMode(s) {
+  s.data.ai = { active: true, expiresAt: Date.now() + AI_TIMEOUT_MS };
+  s.step = "consultas_ia";
+}
+function touchAIMode(s) {
+  if (isAIMode(s)) s.data.ai.expiresAt = Date.now() + AI_TIMEOUT_MS;
+}
+function expireAIModeIfNeeded(s) {
+  if (!isAIMode(s)) return false;
+  if (Date.now() > (s.data.ai.expiresAt || 0)) {
+    s.data.ai.active = false;
+    s.step = "consultas_menu";
+    return true;
+  }
+  return false;
+}
+function exitAIMode(s) {
+  if (s.data?.ai) s.data.ai.active = false;
+  s.step = "consultas_menu";
+}
+
+// Export utilitarias para otros procesos
+function engineExitAI(chatId) {
+  const s = getSession(chatId);
+  exitAIMode(s);
+  return s;
+}
+function engineTouchAI(chatId) {
+  const s = getSession(chatId);
+  if (isAIMode(s)) {
+    touchAIMode(s);
+    return s.data.ai.expiresAt;
+  }
+  return null;
+}
+
 function num(v) {
   if (typeof v !== "string") return Number(v);
   const normalized = v.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
@@ -90,6 +132,46 @@ const INDEX_KEYS = [
   "IPC_CREEBBA_1M",
   "IPC_CREEBBA_2M",
 ];
+function propiedadesOperacionMenuText() {
+  return [
+    "🏷️ *Consulta de propiedades*",
+    "Elegí una opción (número o letra):",
+    "1) Alquilar",
+    "2) Comprar",
+    "3) Temporario",
+    "4) Vender",
+    "Tip: podés escribir 1/2/3/4 o A/B/C/D.",
+  ].join("\n");
+}
+function propiedadesTipoMenuText(op) {
+  const verb =
+    op === "comprar"
+      ? "comprar"
+      : op === "temporario"
+      ? "alquilar (temporario)"
+      : "alquilar";
+  return [
+    `Elegiste *${op}*. ¿Qué tipo de propiedad querés ${verb}?`,
+    "Elegí (número o letra):",
+    "1) Casa",
+    "2) Depto",
+    "3) PH",
+    "4) Otro",
+    "Tip: podés escribir 1/2/3/4 o A/B/C/D.",
+    "También podés escribir el tipo (ej.: casa, depto, ph).",
+  ].join("\n");
+}
+
+function normalizePropType(raw) {
+  const t = String(raw || "").toLowerCase();
+  if (/^1$|^a$|^casa\b/.test(t)) return "casa";
+  if (/^2$|^b$|^depto\b|departament/.test(t)) return "depto";
+  if (/^3$|^c$|^ph\b/.test(t)) return "ph";
+  if (/^4$|^d$|^otro\b/.test(t)) return "otro";
+  // si no coincide, devolvemos el texto como “otro” explícito
+  if (t.trim()) return t.trim();
+  return null;
+}
 
 // 1–9 (ya existe pickMenuNumber); extendemos a 1–10 con esta variante
 function pickMenuNumber10(text) {
@@ -391,10 +473,16 @@ function alquileresMenuText() {
 function indicesMenuText() {
   return [
     "Decime qué índice querés usar (podés escribir el *nombre*, o *1–10* o *A–J*):",
-    "1) ICL   2) CAC   3) UVA   4) UVI   5) CER",
+    "1) ICL",
+    "2) CAC",
+    "3) UVA",
+    "4) UVI",
+    "5) CER",
     "6) Casa Propia",
-    "7) IPC INDEC 1 mes   8) IPC INDEC 2 meses",
-    "9) IPC CREEBBA 1 mes   10) IPC CREEBBA 2 meses",
+    "7) IPC INDEC 1 mes",
+    "8) IPC INDEC 2 meses",
+    "9) IPC CREEBBA 1 mes",
+    "10) IPC CREEBBA 2 meses",
     "Ejemplo: “ICL”, “8”, “B”.",
   ].join("\n");
 }
@@ -497,27 +585,22 @@ async function handleNLUIntent(nlu, s) {
           : indicesMenuText()
       );
       break;
-
     case "properties_rent":
       s.data.op = "alquilar";
-      s.step = "prop_buscar_tipo";
-      replies.push(
-        "🧭 ¿Qué tipo de propiedad querés alquilar? (casa, depto, ph, etc.)"
-      );
+      s.step = "prop_tipo_menu";
+      replies.push(propiedadesTipoMenuText("alquilar"));
       break;
+
     case "properties_buy":
       s.data.op = "comprar";
-      s.step = "prop_buscar_tipo";
-      replies.push(
-        "🧭 ¿Qué tipo de propiedad querés comprar? (casa, depto, ph, etc.)"
-      );
+      s.step = "prop_tipo_menu";
+      replies.push(propiedadesTipoMenuText("comprar"));
       break;
+
     case "properties_temp":
       s.data.op = "temporario";
-      s.step = "prop_buscar_tipo";
-      replies.push(
-        "🧭 ¿Qué tipo de propiedad buscás para temporario? (casa, depto, ph, etc.)"
-      );
+      s.step = "prop_tipo_menu";
+      replies.push(propiedadesTipoMenuText("temporario"));
       break;
     case "properties_sell":
       s.data.op = "vender";
@@ -583,7 +666,6 @@ async function handleImage({ chatId, file }) {
   return { replies, session: s };
 }
 
-// ===== Main handleText =====
 // ===== Main handleText (con soporte de menús numéricos 1–3 y 1–5) =====
 async function handleText({ chatId, text }) {
   const s = getSession(chatId);
@@ -605,11 +687,17 @@ async function handleText({ chatId, text }) {
   }
 
   // Atajos
-  if (["menu", "inicio", "start", "/start"].includes(body)) {
-    reset(chatId);
+  if (["menu", "inicio", "start", "/start", "salir", "exit"].includes(body)) {
+    reset(chatId); // sale de cualquier modo (incluida IA)
     replies.push(mainMenuText());
-    return { replies, notifyAgent, session: getSession(chatId) };
+    return {
+      replies,
+      notifyAgent,
+      session: getSession(chatId),
+      aiSignal: { mode: "off" },
+    };
   }
+
   if (["operador", "humano", "agente", "asesor"].includes(body)) {
     if (REPORT_STEPS.has(s.step)) {
       // diferir handoff y forzar el paso de fotos
@@ -627,6 +715,28 @@ async function handleText({ chatId, text }) {
     return { replies, notifyAgent, session: s };
   }
 
+  // ===== MODO IA ACTIVO (consultas_ia) =====
+  if (isAIMode(s)) {
+    const expired = expireAIModeIfNeeded(s);
+    if (!expired) {
+      const ai = await answerFAQ({
+        text: bodyRaw,
+        history: s.history,
+        step: s.step,
+      });
+      replies.push(ai);
+      replies.push("Tip: escribí *menu* o *salir* para volver al inicio.");
+      touchAIMode(s);
+      return {
+        replies,
+        notifyAgent,
+        session: s,
+        aiSignal: { mode: "extend", until: s.data.ai.expiresAt },
+      };
+    }
+    // si expiró, dejamos que el mensaje actual siga el flujo normal (ya fuera de IA)
+  }
+
   // Reparación
   if (isRepair(bodyRaw)) {
     s.data = {};
@@ -639,22 +749,28 @@ async function handleText({ chatId, text }) {
   }
 
   // ===== Menú numérico: Principal (1–3) =====
+  // ===== Menú principal: acepta 1–3 o A–C =====
   if (s.step === "start" || s.step === "main") {
     const nMain = pickMenuNumberLocal(bodyRaw, 3);
-    if (nMain) {
-      if (nMain === 1) {
-        s.step = "alquileres_menu";
-        replies.push(alquileresMenuText());
-      } else if (nMain === 2) {
-        s.step = "prop_menu";
-        replies.push(
-          "Contame si querés alquilar, comprar, temporario o vender; y el tipo (casa, depto, ph, etc.)."
-        );
-      } else if (nMain === 3) {
-        s.step = "consultas_menu";
-        replies.push(
-          'Contame tu consulta o escribí "operador" para hablar con alguien del equipo.'
-        );
+    const lMain = pickLetterChoice(bodyRaw, 3);
+    const choice = nMain || lMain;
+
+    if (choice) {
+      switch (choice) {
+        case 1:
+          s.step = "alquileres_menu";
+          replies.push(alquileresMenuText());
+          break;
+        case 2:
+          s.step = "prop_menu";
+          replies.push(propiedadesOperacionMenuText());
+          break;
+        case 3:
+          s.step = "consultas_menu";
+          replies.push(
+            'Contame tu consulta o escribí "operador" para hablar con alguien del equipo.'
+          );
+          break;
       }
       return { replies, notifyAgent, session: s };
     }
@@ -742,6 +858,31 @@ async function handleText({ chatId, text }) {
       }
       s.data.await = null;
     }
+  }
+
+  // ===== CONSULTAS GENERALES → IA si no hay respuesta rápida =====
+  if (s.step === "consultas_menu") {
+    const quickCg = quickAnswer(bodyRaw);
+    if (quickCg) {
+      replies.push(quickCg);
+      return { replies, notifyAgent, session: s };
+    }
+    enterAIMode(s);
+    const ai = await answerFAQ({
+      text: bodyRaw,
+      history: s.history,
+      step: s.step,
+    });
+    replies.push(ai);
+    replies.push(
+      "Seguimos en *modo consulta*. Escribí *menu* o *salir* para volver."
+    );
+    return {
+      replies,
+      notifyAgent,
+      session: s,
+      aiSignal: { mode: "on", until: s.data.ai.expiresAt },
+    };
   }
 
   // Mini-FAQ rápida (reglas)
@@ -1033,11 +1174,61 @@ async function handleText({ chatId, text }) {
 
     // Propiedades
     case "prop_menu": {
-      replies.push(
-        "Contame si querés alquilar, comprar, temporario o vender; y el tipo (“casa”, “depto”, “ph”…)."
-      );
-      break;
+      // aceptar número/letra o texto (alquilar/comprar/temporario/vender)
+      const byNum = pickMenuNumberLocal(bodyRaw, 4);
+      const byLet = pickLetterChoice(bodyRaw, 4);
+      const t = body.toLowerCase();
+
+      let op = null;
+      if (byNum || byLet) {
+        const pos = byNum || byLet;
+        op = ["alquilar", "comprar", "temporario", "vender"][pos - 1];
+      } else if (/^alquil/.test(t)) op = "alquilar";
+      else if (/^compr/.test(t)) op = "comprar";
+      else if (/temporari/.test(t)) op = "temporario";
+      else if (/^vender|venta|tasaci/.test(t)) op = "vender";
+
+      if (!op) {
+        replies.push(propiedadesOperacionMenuText());
+        return { replies, notifyAgent, session: s };
+      }
+
+      s.data.op = op;
+
+      if (op === "vender") {
+        s.step = "prop_vender_tipo";
+        replies.push(
+          "🧾 ¿Qué *tipo de propiedad* querés vender? (casa, depto, local, etc.)"
+        );
+      } else {
+        s.step = "prop_tipo_menu";
+        replies.push(propiedadesTipoMenuText(op));
+      }
+      return { replies, notifyAgent, session: s };
     }
+    case "prop_tipo_menu": {
+      const tipo = normalizePropType(bodyRaw);
+      if (!tipo) {
+        replies.push(propiedadesTipoMenuText(s.data.op || "alquilar"));
+        return { replies, notifyAgent, session: s };
+      }
+
+      // Si puso "otro" y no escribió nada más, pedile tipo libre
+      if (tipo === "otro") {
+        s.step = "prop_buscar_tipo";
+        replies.push(
+          "Decime el *tipo de propiedad* (ej.: local, duplex, loft, cabaña…):"
+        );
+        return { replies, notifyAgent, session: s };
+      }
+
+      // Tipo reconocido o texto libre → avanzamos
+      s.data.prop = { tipo, op: s.data.op || "alquilar" };
+      s.step = "prop_presupuesto";
+      replies.push("💰 Indicá *presupuesto aproximado* (ej: 250000):");
+      return { replies, notifyAgent, session: s };
+    }
+
     case "prop_buscar_tipo": {
       s.data.prop = { tipo: bodyRaw, op: s.data.op || "alquilar" };
       s.step = "prop_presupuesto";
@@ -1221,4 +1412,11 @@ async function handleText({ chatId, text }) {
   return { replies, notifyAgent, session: s };
 }
 
-module.exports = { handleText, handleImage, reset, getSession };
+module.exports = {
+  handleText,
+  handleImage,
+  reset,
+  getSession,
+  engineExitAI,
+  engineTouchAI,
+};

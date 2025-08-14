@@ -6,7 +6,15 @@ const path = require("path");
 const fs = require("fs");
 require("dotenv").config();
 
-const { handleText, handleImage, reset } = require("./engine");
+// 👇 Importa helpers IA adicionales desde engine.js
+const {
+  handleText,
+  handleImage,
+  reset,
+  getSession,
+  engineExitAI,
+  engineTouchAI,
+} = require("./engine");
 
 /* ====================== Botones contextuales ====================== */
 function buildButtonsForStep(session) {
@@ -62,7 +70,7 @@ function buildButtonsForStep(session) {
         { label: "Sí", value: "sí" },
         { label: "No", value: "no" },
       ];
-    case "rep_fotos_preg": // 👈 NUEVO
+    case "rep_fotos_preg":
       return [
         { label: "Sí", value: "sí" },
         { label: "No", value: "no" },
@@ -76,6 +84,8 @@ function buildButtonsForStep(session) {
 const pendingChats = new Map(); // chatId -> { chatId, since, payload }
 const conversations = new Map(); // chatId -> [{who, text?, url?, type, ts}]
 const humanChats = new Map(); // chatId -> { agentId, agentName }
+// 👇 Timers para modo IA proactivo
+const aiTimers = new Map(); // chatId -> timeoutId
 
 function addToQueue(rec, adminIo) {
   pendingChats.set(rec.chatId, rec);
@@ -87,6 +97,41 @@ function removeFromQueue(chatId, adminIo) {
 function pushTranscript(chatId, msg) {
   if (!conversations.has(chatId)) conversations.set(chatId, []);
   conversations.get(chatId).push(msg);
+}
+
+// ==== Helpers IA proactivo (server) ====
+function clearAIModeTimer(chatId) {
+  const t = aiTimers.get(chatId);
+  if (t) {
+    clearTimeout(t);
+    aiTimers.delete(chatId);
+  }
+}
+
+function scheduleAIModeTimeout(chatId, untilTs) {
+  clearAIModeTimer(chatId);
+  const delay = Math.max(0, untilTs - Date.now());
+  const t = setTimeout(() => {
+    // si están con agente, no molestamos
+    if (humanChats.has(chatId)) return clearAIModeTimer(chatId);
+
+    const s = getSession(chatId);
+    const stillAI = s && s.step === "consultas_ia" && s.data?.ai?.active;
+    if (!stillAI) return clearAIModeTimer(chatId);
+
+    engineExitAI(chatId); // pasa a consultas_menu
+    const text =
+      "⏱️ Cerramos el modo consulta por inactividad. Escribí *menu* para volver.";
+    io.to(chatId).emit("system_message", { text });
+    pushTranscript(chatId, {
+      who: "system",
+      text,
+      ts: Date.now(),
+      type: "text",
+    });
+    clearAIModeTimer(chatId);
+  }, delay);
+  aiTimers.set(chatId, t);
 }
 
 /* ====================== Server & Sockets ====================== */
@@ -177,6 +222,9 @@ function endHumanChat(chatId, who, io, adminIo) {
     ts: Date.now(),
   });
 
+  // 🔴 limpiar timer de IA si estaba activo
+  clearAIModeTimer(chatId);
+
   // Reset del flujo del bot (la UI volverá al menú tras rate_submit)
   reset(chatId);
 }
@@ -199,6 +247,9 @@ adminIo.on("connection", (socket) => {
       agentId: socket.id,
       agentName: agent || "Agente",
     });
+
+    // 🧹 cortar timer IA si estaba corriendo (para no notificar en medio del handoff)
+    clearAIModeTimer(chatId);
 
     // 3) Enviar snapshot al agente (incluye payload del caso)
     const transcript = conversations.get(chatId) || [];
@@ -273,6 +324,8 @@ adminIo.on("connection", (socket) => {
           text: "Agente desconectado",
           ts,
         });
+        // 🔴 limpiar timer IA si estaba activo
+        clearAIModeTimer(chatId);
         // (opcional) resetear FSM del bot para empezar limpio
         reset(chatId);
       }
@@ -308,7 +361,7 @@ io.on("connection", (socket) => {
     if (humanChats.has(socket.id)) return;
 
     // bot
-    const { replies, notifyAgent, session } = await handleText({
+    const { replies, notifyAgent, session, aiSignal } = await handleText({
       chatId: socket.id,
       text,
     });
@@ -328,6 +381,14 @@ io.on("connection", (socket) => {
         type: "text",
       });
     });
+
+    // Programación / limpieza de timer IA según señal del engine
+    if (aiSignal?.mode === "on" || aiSignal?.mode === "extend") {
+      if (aiSignal.until) scheduleAIModeTimeout(socket.id, aiSignal.until);
+    }
+    if (aiSignal?.mode === "off") {
+      clearAIModeTimer(socket.id);
+    }
 
     // botones contextuales si aplica
     const buttons = buildButtonsForStep(session);
@@ -440,6 +501,13 @@ io.on("connection", (socket) => {
           ts: Date.now(),
         });
       }
+
+      // 🕒 Si está en modo IA, extender ventana por actividad con imagen
+      const sNow = getSession(socket.id);
+      if (sNow && sNow.step === "consultas_ia" && sNow.data?.ai?.active) {
+        const until = engineTouchAI(socket.id);
+        if (until) scheduleAIModeTimeout(socket.id, until);
+      }
     } catch (e) {
       console.error("❌ Error guardando imagen:", e);
       socket.emit("system_message", { text: "⚠️ No pude procesar la imagen." });
@@ -489,6 +557,8 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("🔴 Cliente desconectado", socket.id);
     removeFromQueue(socket.id, adminIo);
+    // 🧹 cortar timer IA si estaba activo
+    clearAIModeTimer(socket.id);
 
     // si estaba con agente, avisar y limpiar
     if (humanChats.has(socket.id)) {

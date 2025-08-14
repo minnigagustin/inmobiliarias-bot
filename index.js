@@ -5,7 +5,13 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
-const { handleText, handleImage } = require("./engine");
+const {
+  handleText,
+  handleImage,
+  getSession,
+  engineExitAI,
+  engineTouchAI,
+} = require("./engine");
 
 // ===== Bridge (socket.io-client) para integrarse con server.js (/bridge) =====
 const { io } = require("socket.io-client");
@@ -16,6 +22,7 @@ const bridge = io(BRIDGE_URL, { transports: ["websocket"] });
 const humanMode = new Set();
 // JIDs ya registrados en el bridge
 const registered = new Set();
+const aiTimersWA = new Map(); // chatId -> timeoutId
 
 // Helpers Bridge
 function bridgeRegisterIfNeeded(chatId) {
@@ -27,6 +34,37 @@ function bridgeRegisterIfNeeded(chatId) {
 function pushTx(chatId, msg) {
   // msg: { who: "user"|"bot"|"system"|"agent", text?, url?, type, ts }
   bridge.emit("push_transcript", { chatId, msg });
+}
+
+function clearAIModeTimerWA(chatId) {
+  const t = aiTimersWA.get(chatId);
+  if (t) {
+    clearTimeout(t);
+    aiTimersWA.delete(chatId);
+  }
+}
+function scheduleAIModeTimeoutWA(chatId, untilTs) {
+  clearAIModeTimerWA(chatId);
+  const delay = Math.max(0, untilTs - Date.now());
+  const t = setTimeout(async () => {
+    // si está en modo humano, no avisamos
+    if (humanMode.has(chatId)) return clearAIModeTimerWA(chatId);
+
+    const s = getSession(chatId);
+    const stillAI = s && s.step === "consultas_ia" && s.data?.ai?.active;
+    if (!stillAI) return clearAIModeTimerWA(chatId);
+
+    engineExitAI(chatId);
+    const text =
+      "⏱️ Cerramos el modo consulta por inactividad. Escribí *menu* para volver.";
+    try {
+      await client.sendMessage(chatId, text);
+    } catch (_) {}
+    // Transcript al panel
+    pushTx(chatId, { who: "system", type: "text", text, ts: Date.now() });
+    clearAIModeTimerWA(chatId);
+  }, delay);
+  aiTimersWA.set(chatId, t);
 }
 
 // Eventos del bridge
@@ -50,6 +88,7 @@ bridge.on("agent_assigned", async ({ chatId, agent }) => {
       chatId,
       `👤 ${agent || "Un agente"} tomó tu caso.`
     );
+    clearAIModeTimerWA(chatId);
   } catch (_) {}
 });
 
@@ -77,6 +116,7 @@ bridge.on("finish", async ({ chatId }) => {
       chatId,
       "✅ El agente finalizó la conversación. Volvemos al asistente."
     );
+    clearAIModeTimerWA(chatId);
   } catch (_) {}
 });
 
@@ -220,6 +260,12 @@ client.on("message", async (msg) => {
         });
       }
 
+      const sNow = getSession(chatId);
+      if (sNow && sNow.step === "consultas_ia" && sNow.data?.ai?.active) {
+        const until = engineTouchAI(chatId);
+        if (until) scheduleAIModeTimeoutWA(chatId, until);
+      }
+
       // Si vino con caption, lo tratamos como mensaje de texto adicional
       if (bodyRaw) {
         // transcript del caption como texto del user
@@ -230,25 +276,33 @@ client.on("message", async (msg) => {
           ts: Date.now(),
         });
 
-        const res2 = await handleText({ chatId, text: bodyRaw });
-        for (const t of res2.replies) {
+        const {
+          replies: replies2,
+          notifyAgent: notifyAgent2,
+          session: session2,
+          aiSignal: aiSignal2,
+        } = await handleText({ chatId, text: bodyRaw });
+
+        for (const t of replies2) {
           await client.sendMessage(chatId, t);
-          pushTx(chatId, {
-            who: "bot",
-            type: "text",
-            text: t,
-            ts: Date.now(),
-          });
+          pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+        }
+
+        // Programación / limpieza de timer IA (para caption)
+        if (aiSignal2?.mode === "on" || aiSignal2?.mode === "extend") {
+          if (aiSignal2.until) scheduleAIModeTimeoutWA(chatId, aiSignal2.until);
+        }
+        if (aiSignal2?.mode === "off") {
+          clearAIModeTimerWA(chatId);
         }
 
         // Si se derivó a agente → ENCOLAR en el panel (bridge)
-        if (res2.notifyAgent) {
+        if (notifyAgent2) {
           bridge.emit("enqueue", {
             chatId,
             since: Date.now(),
-            payload: res2.notifyAgent, // {categoria, direccion, descripcion, fotos(urls), ...}
+            payload: notifyAgent2,
           });
-          // Mensaje informativo al usuario
           const infoTxt = "📣 (Demo) Un agente fue notificado.";
           await client.sendMessage(chatId, infoTxt);
           pushTx(chatId, {
@@ -259,8 +313,11 @@ client.on("message", async (msg) => {
           });
         }
 
-        // Si el engine reinició, limpiamos cache de fotos
-        if (res2.session && res2.session.step === "start") clearMedia(chatId);
+        // Si el engine reinició, limpiamos cache de fotos y apagamos timer IA
+        if (session2 && session2.step === "start") {
+          clearMedia(chatId);
+          clearAIModeTimerWA(chatId);
+        }
       }
 
       try {
@@ -273,12 +330,22 @@ client.on("message", async (msg) => {
     // Transcript del usuario (texto)
     pushTx(chatId, { who: "user", type: "text", text: bodyRaw, ts });
 
-    const result = await handleText({ chatId, text: bodyRaw });
-    const { replies, notifyAgent, session } = result;
+    const { replies, notifyAgent, session, aiSignal } = await handleText({
+      chatId,
+      text: bodyRaw,
+    });
 
     for (const t of replies) {
       await client.sendMessage(chatId, t);
       pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+    }
+
+    // Programación / limpieza de timer IA
+    if (aiSignal?.mode === "on" || aiSignal?.mode === "extend") {
+      if (aiSignal.until) scheduleAIModeTimeoutWA(chatId, aiSignal.until);
+    }
+    if (aiSignal?.mode === "off") {
+      clearAIModeTimerWA(chatId);
     }
 
     // Handoff: encolar para panel admin (bridge)
@@ -342,7 +409,11 @@ client.on("message", async (msg) => {
 
     // Si el engine reseteó el flujo (volvió a start), limpiamos media cache
     if (session && session.step === "start") clearMedia(chatId);
-
+    // Si el engine reseteó el flujo (volvió a start), limpiamos media cache y timer IA
+    if (session && session.step === "start") {
+      clearMedia(chatId);
+      clearAIModeTimerWA(chatId);
+    }
     try {
       await chat.clearState();
     } catch (_) {}
