@@ -79,7 +79,7 @@ header {
 }
 
 /* Formulario */
-form {
+.chat-container form {
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 10px;
