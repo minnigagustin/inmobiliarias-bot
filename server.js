@@ -1,6 +1,7 @@
 // server.js — Web chat + botones + Panel Admin con handoff en vivo
 const express = require("express");
 const http = require("http");
+const https = require("https");
 const { Server } = require("socket.io");
 const path = require("path");
 const fs = require("fs");
@@ -158,7 +159,16 @@ function scheduleAIModeTimeout(chatId, untilTs) {
 
 /* ====================== Server & Sockets ====================== */
 const app = express();
-const server = http.createServer(app);
+var options = {
+  key: fs.readFileSync(
+    "/etc/letsencrypt/live/backpackpuntaalta.ar/privkey.pem"
+  ),
+  cert: fs.readFileSync(
+    "/etc/letsencrypt/live/backpackpuntaalta.ar/fullchain.pem"
+  ),
+};
+
+const server = https.createServer(options, app);
 const io = new Server(server, {
   maxHttpBufferSize: 10 * 1024 * 1024, // 10 MB
 });
