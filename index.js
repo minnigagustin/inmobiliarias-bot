@@ -15,7 +15,7 @@ const {
 
 // ===== Bridge (socket.io-client) para integrarse con server.js (/bridge) =====
 const { io } = require("socket.io-client");
-const BRIDGE_URL = process.env.BRIDGE_URL || "http://localhost:3000/bridge";
+const BRIDGE_URL = process.env.BRIDGE_URL || "http://localhost:443/bridge";
 const bridge = io(BRIDGE_URL, { transports: ["websocket"] });
 
 // Chats de WhatsApp en modo humano (tomados por un agente en el panel)
