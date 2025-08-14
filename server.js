@@ -75,6 +75,28 @@ function buildButtonsForStep(session) {
         { label: "Sí", value: "sí" },
         { label: "No", value: "no" },
       ];
+    case "prop_menu":
+      return [
+        { label: "1. Alquilar", value: "1" },
+        { label: "2. Comprar", value: "2" },
+        { label: "3. Temporario", value: "3" },
+        { label: "4. Vender", value: "4" },
+      ];
+    case "prop_tipo_menu":
+      return [
+        { label: "1. Casa", value: "1" },
+        { label: "2. Depto", value: "2" },
+        { label: "3. PH", value: "3" },
+        { label: "4. Otro", value: "4" },
+      ];
+    // y para la moneda:
+    case "ind_moneda":
+    case "prop_moneda":
+      return [
+        { label: "1. Pesos (ARS)", value: "1" },
+        { label: "2. Dólares (USD)", value: "2" },
+      ];
+
     default:
       return null;
   }

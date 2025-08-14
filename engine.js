@@ -860,6 +860,45 @@ async function handleText({ chatId, text }) {
     // si no eligió por código, seguimos el flujo normal (NLU o texto libre)
   }
 
+  // ===== Menú: Propiedades (1–4 o A–D) — capturar ANTES de NLU =====
+  if (s.step === "prop_menu") {
+    const byNum = (function pickMenuNumberLocal(src, max = 9) {
+      const m = String(src || "")
+        .trim()
+        .match(/^(?:op(?:ci[oó]n)?\s*)?([1-9])(?:\s*[\).\:]?)?$/i);
+      if (!m) return null;
+      const n = parseInt(m[1], 10);
+      return n >= 1 && n <= max ? n : null;
+    })(bodyRaw, 4);
+    const byLet = pickLetterChoice(bodyRaw, 4);
+
+    let op = null;
+    if (byNum || byLet) {
+      const pos = byNum || byLet;
+      op = ["alquilar", "comprar", "temporario", "vender"][pos - 1];
+    } else if (/^alquil/.test(body)) op = "alquilar";
+    else if (/^compr/.test(body)) op = "comprar";
+    else if (/temporari/.test(body)) op = "temporario";
+    else if (/^vender|venta|tasaci/.test(body)) op = "vender";
+
+    if (!op) {
+      replies.push(propiedadesOperacionMenuText());
+      return { replies, notifyAgent, session: s };
+    }
+
+    s.data.op = op;
+    if (op === "vender") {
+      s.step = "prop_vender_tipo";
+      replies.push(
+        "🧾 ¿Qué *tipo de propiedad* querés vender? (casa, depto, local, etc.)"
+      );
+    } else {
+      s.step = "prop_tipo_menu";
+      replies.push(propiedadesTipoMenuText(op));
+    }
+    return { replies, notifyAgent, session: s };
+  }
+
   // Desambiguaciones pendientes
   if (s.data.await) {
     if (s.data.await === "owner_or_other") {
@@ -936,6 +975,45 @@ async function handleText({ chatId, text }) {
   ].includes(s.step);
 
   const canUseNLU = NLU_STEPS.has(s.step);
+
+  // ===== Menú: Propiedades (1–4 o A–D) — capturar ANTES de NLU =====
+  if (s.step === "prop_menu") {
+    const byNum = (function pickMenuNumberLocal(src, max = 9) {
+      const m = String(src || "")
+        .trim()
+        .match(/^(?:op(?:ci[oó]n)?\s*)?([1-9])(?:\s*[\).\:]?)?$/i);
+      if (!m) return null;
+      const n = parseInt(m[1], 10);
+      return n >= 1 && n <= max ? n : null;
+    })(bodyRaw, 4);
+    const byLet = pickLetterChoice(bodyRaw, 4);
+
+    let op = null;
+    if (byNum || byLet) {
+      const pos = byNum || byLet;
+      op = ["alquilar", "comprar", "temporario", "vender"][pos - 1];
+    } else if (/^alquil/.test(body)) op = "alquilar";
+    else if (/^compr/.test(body)) op = "comprar";
+    else if (/temporari/.test(body)) op = "temporario";
+    else if (/^vender|venta|tasaci/.test(body)) op = "vender";
+
+    if (!op) {
+      replies.push(propiedadesOperacionMenuText());
+      return { replies, notifyAgent, session: s };
+    }
+
+    s.data.op = op;
+    if (op === "vender") {
+      s.step = "prop_vender_tipo";
+      replies.push(
+        "🧾 ¿Qué *tipo de propiedad* querés vender? (casa, depto, local, etc.)"
+      );
+    } else {
+      s.step = "prop_tipo_menu";
+      replies.push(propiedadesTipoMenuText(op));
+    }
+    return { replies, notifyAgent, session: s };
+  }
 
   if (!expectingNumeric && canUseNLU) {
     // --------- Capa pre-NLU ---------
