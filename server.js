@@ -102,6 +102,32 @@ app.use("/uploads", express.static(uploadsDir, { maxAge: "7d" }));
 
 const adminIo = io.of("/admin");
 
+// === Bridge para canales externos (WhatsApp) ===
+const bridgeIo = io.of("/bridge");
+const bridgeChats = new Map(); // chatId -> socketId del bridge
+
+bridgeIo.on("connection", (socket) => {
+  // WA se registra con el chatId (JID de WhatsApp)
+  socket.on("register_chat", ({ chatId }) => {
+    if (chatId) bridgeChats.set(chatId, socket.id);
+  });
+
+  // WA encola casos para el panel admin
+  socket.on("enqueue", (rec) => addToQueue(rec, adminIo));
+
+  // WA empuja transcript (user/bot/media)
+  socket.on("push_transcript", ({ chatId, msg }) => {
+    if (!chatId || !msg) return;
+    pushTranscript(chatId, msg);
+    fanoutToAgentIfNeeded(chatId, msg);
+  });
+
+  socket.on("disconnect", () => {
+    for (const [id, sid] of bridgeChats.entries())
+      if (sid === socket.id) bridgeChats.delete(id);
+  });
+});
+
 // (Opcional) auth por token simple
 adminIo.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -162,25 +188,37 @@ adminIo.on("connection", (socket) => {
 
   // Asignación de un chat al agente
   socket.on("assign", ({ chatId, agent }) => {
-    // 👇 Tomo el registro ANTES de removerlo de la cola
+    // 1) Tomo el registro ANTES de removerlo de la cola
     const rec = pendingChats.get(chatId) || null;
     const payload = rec?.payload || null;
 
     removeFromQueue(chatId, adminIo);
+
+    // 2) Marcar chat en modo humano en el server (aplica a web y WA)
     humanChats.set(chatId, {
       agentId: socket.id,
       agentName: agent || "Agente",
     });
 
+    // 3) Enviar snapshot al agente (incluye payload del caso)
     const transcript = conversations.get(chatId) || [];
-    // 👇 ahora enviamos también `payload`
     socket.emit("assigned", { chatId, transcript, payload });
 
-    io.to(chatId).emit("system_message", {
-      text: `👤 ${agent || "Un agente"} tomó tu caso.`,
-    });
-    io.to(chatId).emit("agent_assigned", { agent: agent || "Agente" });
+    // 4) Si es un chat de WhatsApp (registrado en el bridge), avisarle al proceso WA
+    const sid = bridgeChats.get(chatId);
+    if (sid) {
+      bridgeIo.to(sid).emit("agent_assigned", { chatId, agent });
+    }
 
+    // 5) Notificar al usuario web (si existe un socket con ese id)
+    if (io.sockets.sockets.has(chatId)) {
+      io.to(chatId).emit("system_message", {
+        text: `👤 ${agent || "Un agente"} tomó tu caso.`,
+      });
+      io.to(chatId).emit("agent_assigned", { agent: agent || "Agente" });
+    }
+
+    // 6) Transcript y eco al panel
     const ts = Date.now();
     pushTranscript(chatId, {
       who: "system",
@@ -201,14 +239,23 @@ adminIo.on("connection", (socket) => {
     // guardar y enviar al usuario
     pushTranscript(chatId, { who: "agent", text, ts, type: "text" });
     io.to(chatId).emit("agent_message", { text });
+
+    if (bridgeChats.has(chatId)) {
+      bridgeIo
+        .to(bridgeChats.get(chatId))
+        .emit("deliver_to_user", { chatId, text });
+    }
     // eco al propio agente (por si hay varios)
     fanoutToAgentIfNeeded(chatId, { who: "agent", text, ts, type: "text" });
   });
 
   // 👇 NUEVO: el agente finaliza
-  socket.on("finish", ({ chatId }) =>
-    endHumanChat(chatId, "agent", io, adminIo)
-  );
+  socket.on("finish", ({ chatId }) => {
+    endHumanChat(chatId, "agent", io, adminIo);
+    if (bridgeChats.has(chatId)) {
+      bridgeIo.to(bridgeChats.get(chatId)).emit("finish", { chatId });
+    }
+  });
 
   // Limpieza si el agente se desconecta
   socket.on("disconnect", () => {
