@@ -498,7 +498,7 @@ function alquileresMenuText() {
     "2. Actualizar alquiler por índice (ICL, CAC, UVA/UVI, CER, Casa Propia, IPC)",
     "3. Información para inquilinos",
     "4. Información para propietarios",
-    "5. Hablar con un humano",
+    "5. Hablar con un operador",
     "",
     "También podés describirlo con tus palabras (ej.: “fuga de gas”, “ICL”).",
   ].join("\n");

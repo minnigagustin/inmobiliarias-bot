@@ -34,7 +34,7 @@ function buildButtonsForStep(session) {
         { label: "2. Actualizar por índice", value: "2" },
         { label: "3. Info inquilinos", value: "3" },
         { label: "4. Info propietarios", value: "4" },
-        { label: "5. Hablar con un humano", value: "5" },
+        { label: "5. Hablar con un operador", value: "5" },
       ];
     case "rep_categoria":
       return [
@@ -356,20 +356,49 @@ adminIo.on("connection", (socket) => {
 });
 
 /* ===== Usuarios del chat ===== */
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("🟢 Cliente conectado", socket.id);
 
-  // bienvenida
-  const hello =
-    '¡Hola! Soy el asistente BR-Group. Escribime lo que necesites (ej.: "se rompió la canilla").';
-  socket.emit("bot_message", { text: hello });
-  pushTranscript(socket.id, {
-    who: "bot",
-    text: hello,
-    ts: Date.now(),
-    type: "text",
+  // ⬇️ Mostrar menú principal reutilizando el engine
+  const { replies, session } = await handleText({
+    chatId: socket.id,
+    text: "menu",
   });
 
+  replies.forEach((t) => {
+    socket.emit("bot_message", { text: t });
+    pushTranscript(socket.id, {
+      who: "bot",
+      text: t,
+      ts: Date.now(),
+      type: "text",
+    });
+    fanoutToAgentIfNeeded(socket.id, {
+      who: "bot",
+      text: t,
+      ts: Date.now(),
+      type: "text",
+    });
+  });
+
+  // Botones contextuales del menú principal
+  const buttons = buildButtonsForStep(session);
+  if (buttons?.length) {
+    const txt = "Elegí una opción:";
+    socket.emit("bot_message", { text: txt, buttons });
+    pushTranscript(socket.id, {
+      who: "bot",
+      text: txt,
+      ts: Date.now(),
+      type: "text",
+    });
+    fanoutToAgentIfNeeded(socket.id, {
+      who: "bot",
+      text: txt,
+      ts: Date.now(),
+      type: "text",
+    });
+  }
   // texto del usuario
   socket.on("user_message", async (msg) => {
     const text = msg && msg.text ? String(msg.text) : "";
