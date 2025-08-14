@@ -46,6 +46,39 @@ function fmtCurrency(n) {
   }).format(n);
 }
 
+// --- NUEVO: formato según moneda ---
+function fmtAmount(n, currency = "ARS") {
+  if (typeof n !== "number" || isNaN(n)) return n;
+  const cur = currency === "USD" ? "USD" : "ARS";
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: cur,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+// --- NUEVO: menú y parser de moneda ---
+function currencyMenuText(label = "monto") {
+  return [
+    `💱 ¿Moneda del ${label}?`,
+    "1) Pesos (ARS)",
+    "2) Dólares (USD)",
+    "Tip: respondé 1/2, A/B, “pesos/ARS” o “dólares/USD”.",
+  ].join("\n");
+}
+function parseCurrency(text) {
+  const t = String(text || "")
+    .toLowerCase()
+    .trim();
+  if (/^(1|a)$/.test(t) || /\b(ars|peso|pesos|\$)\b/.test(t)) return "ARS";
+  if (
+    /^(2|b)$/.test(t) ||
+    /\b(usd|u\$d|u\$s|us\$|dolar|dólar|dolares|dólares|u\.?s\.?d\.?)\b/.test(t)
+  )
+    return "USD";
+  return null;
+}
+
 const REPORT_STEPS = new Set([
   "rep_categoria",
   "rep_direccion",
@@ -581,7 +614,7 @@ async function handleNLUIntent(nlu, s) {
       s.step = s.data.indice ? "ind_monto" : "indices_menu";
       replies.push(
         s.data.indice
-          ? `Perfecto, *${s.data.indice}*. Ingresá el *alquiler actual*:`
+          ? `Perfecto, *${s.data.indice}*. Ingresá el *alquiler actual* (solo número). Después te pregunto la moneda.`
           : indicesMenuText()
       );
       break;
@@ -1113,10 +1146,21 @@ async function handleText({ chatId, text }) {
     }
     case "ind_monto": {
       const monto = num(bodyRaw);
-      if (!monto || monto <= 0)
-        replies.push("Monto inválido. Probá de nuevo (solo números).");
-      else {
+      if (!monto || monto <= 0) {
+        replies.push("Monto inválido. Probá de nuevo (solo números, sin $).");
+      } else {
         s.data.monto = monto;
+        s.step = "ind_moneda"; // ← NUEVO paso
+        replies.push(currencyMenuText("alquiler actual"));
+      }
+      break;
+    }
+    case "ind_moneda": {
+      const cur = parseCurrency(bodyRaw);
+      if (!cur) {
+        replies.push(currencyMenuText("alquiler actual"));
+      } else {
+        s.data.moneda = cur; // "ARS" | "USD"
         s.step = "ind_inicial";
         replies.push("Ingresá el *valor del índice inicial* (ej: 21,54):");
       }
@@ -1139,16 +1183,19 @@ async function handleText({ chatId, text }) {
         const factor = v / s.data.ind_val_inicial;
         const variacionPct = (factor - 1) * 100;
         const nuevo = s.data.monto * factor;
+        const cur = s.data.moneda || "ARS";
+
         s.step = "ind_derivar";
         s.data.ind_val_final = v;
-        s.data.calculo = `Factor: ${factor.toFixed(6)} (${variacionPct.toFixed(
-          2
-        )} %), Nuevo: ${fmtCurrency(nuevo)}`;
+        s.data.calculo =
+          `Factor: ${factor.toFixed(6)} (${variacionPct.toFixed(2)} %), ` +
+          `Nuevo: ${fmtAmount(nuevo, cur)}`;
+
         replies.push(
           `🧮 Resultado para *${s.data.indice || "Índice seleccionado"}*:
-• Alquiler actual: ${fmtCurrency(s.data.monto)}
+• Alquiler actual: ${fmtAmount(s.data.monto, cur)}
 • Factor: ${factor.toFixed(6)} (${variacionPct.toFixed(2)} %)
-• Nuevo alquiler: ${fmtCurrency(nuevo)}
+• Nuevo alquiler: ${fmtAmount(nuevo, cur)}
 
 ¿Querés que te atienda alguien del equipo? (sí/no)`
         );
@@ -1232,14 +1279,29 @@ async function handleText({ chatId, text }) {
     case "prop_buscar_tipo": {
       s.data.prop = { tipo: bodyRaw, op: s.data.op || "alquilar" };
       s.step = "prop_presupuesto";
-      replies.push("💰 Indicá *presupuesto aproximado* (ej: 250000):");
+      replies.push(
+        "💰 Indicá *presupuesto aproximado* (solo número). Después te pregunto la moneda."
+      );
       break;
     }
     case "prop_presupuesto": {
       const p = num(bodyRaw);
-      if (!p || p <= 0) replies.push("Valor inválido. Probá de nuevo.");
-      else {
+      if (!p || p <= 0) {
+        replies.push("Valor inválido. Probá de nuevo (solo números, sin $).");
+      } else {
+        s.data.prop = s.data.prop || { op: s.data.op || "alquilar" };
         s.data.prop.presupuesto = p;
+        s.step = "prop_moneda"; // ← NUEVO paso
+        replies.push(currencyMenuText("presupuesto"));
+      }
+      break;
+    }
+    case "prop_moneda": {
+      const cur = parseCurrency(bodyRaw);
+      if (!cur) {
+        replies.push(currencyMenuText("presupuesto"));
+      } else {
+        s.data.prop.moneda = cur; // "ARS" | "USD"
         s.step = "prop_zona";
         replies.push("📍 Zona / barrio preferido:");
       }
@@ -1335,23 +1397,27 @@ async function handleText({ chatId, text }) {
     }
     case "prop_comodidades": {
       s.data.prop.comodidades = bodyRaw;
+      const cur = s.data.prop.moneda || "ARS";
+      const base = s.data.prop.presupuesto;
+
       const demo = [
         {
           titulo: "Depto 2 amb. c/balcón – Centro",
-          precio: fmtCurrency(s.data.prop.presupuesto),
+          precio: fmtAmount(base, cur),
         },
         {
           titulo: "PH 3 amb. c/patio – Barrio Norte",
-          precio: fmtCurrency(s.data.prop.presupuesto * 1.1),
+          precio: fmtAmount(base * 1.1, cur),
         },
         {
           titulo: "Casa 3 dorm. c/cochera – Oeste",
-          precio: fmtCurrency(s.data.prop.presupuesto * 1.3),
+          precio: fmtAmount(base * 1.3, cur),
         },
       ];
+
       replies.push(
         `🔎 Búsqueda *${s.data.prop.op}* – *${s.data.prop.tipo}*
-• Presupuesto: ${fmtCurrency(s.data.prop.presupuesto)}
+• Presupuesto: ${fmtAmount(base, cur)}
 • Zona: ${s.data.prop.zona}
 • Dorm: ${s.data.prop.dorm} | Baños: ${s.data.prop.banos} | Cochera: ${
           s.data.prop.cochera
@@ -1368,6 +1434,7 @@ async function handleText({ chatId, text }) {
       s.step = "prop_buscar_derivar";
       break;
     }
+
     case "prop_buscar_derivar": {
       const yn = parseYesNo(bodyRaw);
       if (yn === "yes") {
