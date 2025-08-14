@@ -170,7 +170,40 @@ var options = {
 
 const server = https.createServer(options, app);
 const io = new Server(server, {
-  maxHttpBufferSize: 10 * 1024 * 1024, // 10 MB
+  maxHttpBufferSize: 10 * 1024 * 1024,
+  cors: {
+    origin: (origin, cb) => {
+      // origin es p.ej. "https://br-group.com.ar" en el celu
+      const allow = new Set([
+        "https://br-group.com.ar",
+        "https://www.br-group.com.ar",
+
+        // si también lo abrís directo en backpack:
+        "https://backpackpuntaalta.ar",
+        "https://www.backpackpuntaalta.ar",
+
+        // para tests locales
+        "http://localhost",
+        "http://localhost:3000",
+
+        // algunos webviews envían null/undefined
+        undefined,
+        null,
+      ]);
+      cb(null, allow.has(origin));
+    },
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+// Loguear por qué falla, si falla
+io.engine.on("connection_error", (err) => {
+  console.error("ENGINE connection_error:", {
+    code: err.code,
+    message: err.message,
+    context: err.context,
+  });
 });
 app.use(express.static(path.join(__dirname, "public")));
 const uploadsDir = path.join(__dirname, "public", "uploads");
