@@ -73,6 +73,18 @@
   </style>
 </head>
 <body>
+    <dialog id="nameDialog">
+  <form method="dialog" id="nameForm" style="margin:0">
+    <h3 style="margin:0 0 10px">¿Cómo te llamás?</h3>
+    <input id="nameField" placeholder="Ej.: Ana Pérez" autofocus
+           style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0a1022;color:#fff;">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button value="cancel" class="btn" style="background:#334155;color:#fff">Cancelar</button>
+      <button id="saveNameBtn" class="btn">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
   <div class="admin-wrap">
     <div class="topbar">
       <h1>🧑‍💻 Cola de atención</h1>
@@ -129,8 +141,58 @@
     const caseBox = document.getElementById('case');
     const caseInfo = document.getElementById('caseInfo');
     const casePhotos = document.getElementById('casePhotos');
+    
 
     let currentChatId = null;
+
+    // ===== Nombre del agente (persistente) =====
+const LS_KEY_AGENT = 'brgroup.agentName';
+const nameDialog = document.getElementById('nameDialog');
+const nameField  = document.getElementById('nameField');
+const saveNameBtn = document.getElementById('saveNameBtn');
+
+function setAgentName(name) {
+  const clean = (name || '').trim() || 'Agente';
+  agentNameEl.value = clean;
+  agentAlias.textContent = clean; // etiqueta en el header de la conversación
+  try { localStorage.setItem(LS_KEY_AGENT, clean); } catch {}
+}
+
+// Cargar nombre guardado o pedirlo
+(function initAgentName(){
+  let saved = null;
+  try { saved = localStorage.getItem(LS_KEY_AGENT); } catch {}
+  if (saved && saved.trim()) {
+    setAgentName(saved);
+    return;
+  }
+  // Mostrar modal (o fallback a prompt)
+  if (nameDialog?.showModal) {
+    nameDialog.showModal();
+    setTimeout(()=> nameField?.focus(), 50);
+  } else {
+    const p = prompt('¿Cómo te llamás?'); // fallback simple
+    setAgentName(p);
+  }
+})();
+
+// Guardar desde el modal
+saveNameBtn?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  setAgentName(nameField.value);
+  nameDialog.close();
+});
+
+// Enter en el input del modal
+nameField?.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); setAgentName(nameField.value); nameDialog.close(); }
+});
+
+// Si editan el campo de la topbar, persistir al vuelo
+agentNameEl.addEventListener('input', ()=>{
+  setAgentName(agentNameEl.value);
+});
+
 
     function since(ts){ const s=Math.max(1,Math.round((Date.now()-ts)/1000)); if(s<60) return s+'s'; const m=Math.round(s/60); if(m<60) return m+'m'; const h=Math.round(m/60); return h+'h'; }
     function summarize(p){

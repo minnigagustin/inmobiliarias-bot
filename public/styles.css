@@ -157,3 +157,12 @@ button[type="submit"]:hover { filter: brightness(1.05); }
 }
 
 .btn-group.used .choice-btn:not(:disabled) { opacity: .6; }
+dialog#nameDialog {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  background: #0f142a;
+  color: var(--text);
+  max-width: 420px;
+  padding: 16px;
+}
+dialog::backdrop { background: rgba(0,0,0,.45); }
