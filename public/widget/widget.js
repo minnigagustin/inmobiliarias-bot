@@ -58,11 +58,13 @@
     panel.classList.add("is-open");
     document.body.style.overflow = "hidden"; // 🔒 mobile UX
     input.focus();
+    localStorage.setItem("cw_open", "1");
   }
   function close() {
     isOpen = false;
     panel.classList.remove("is-open");
     document.body.style.overflow = ""; // 🔓
+    localStorage.setItem("cw_open", "0");
   }
 
   launcher.addEventListener("click", () => (isOpen ? close() : open()));
