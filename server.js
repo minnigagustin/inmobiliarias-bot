@@ -212,26 +212,289 @@ app.get("/qr-code", async (req, res) => {
   //   return res.status(401).send("unauthorized");
   // }
 
+  const brand = process.env.BOT_BRAND || "Tu Asistente Virtual";
+  const subtitle =
+    "Bienvenido a la configuración. Para conectar WhatsApp, escaneá el código QR desde WhatsApp Web.";
+
+  // helpers de UI
+  const page = ({ title, badge, bodyHtml, refreshMs }) => `
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${title}</title>
+  ${
+    refreshMs
+      ? `<meta http-equiv="refresh" content="${Math.ceil(refreshMs / 1000)}" />`
+      : ""
+  }
+
+  <style>
+    :root{
+      --bg1:#0b1020; --bg2:#111a33;
+      --card: rgba(255,255,255,.08);
+      --card2: rgba(255,255,255,.12);
+      --txt:#e9ecff; --muted: rgba(233,236,255,.72);
+      --line: rgba(233,236,255,.14);
+      --ok:#22c55e; --wait:#f59e0b; --err:#ef4444;
+      --shadow: 0 24px 70px rgba(0,0,0,.45);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New";
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: var(--sans);
+      color: var(--txt);
+      background:
+        radial-gradient(1200px 600px at 18% 18%, rgba(99,102,241,.25), transparent 55%),
+        radial-gradient(1000px 600px at 80% 10%, rgba(34,197,94,.18), transparent 55%),
+        radial-gradient(900px 600px at 50% 90%, rgba(245,158,11,.14), transparent 55%),
+        linear-gradient(160deg, var(--bg1), var(--bg2));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 28px 16px;
+    }
+    .wrap{width:100%; max-width: 980px;}
+    .top{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:16px; margin-bottom: 16px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:12px;
+    }
+    .logo{
+      width:44px;height:44px;border-radius: 12px;
+      background: linear-gradient(135deg, rgba(99,102,241,.9), rgba(34,197,94,.75));
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+    h1{font-size: 20px; margin:0; letter-spacing:.2px}
+    .sub{margin:2px 0 0; color: var(--muted); font-size: 13px}
+    .badge{
+      padding:8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      display:flex; align-items:center; gap:8px;
+      white-space:nowrap;
+    }
+    .dot{width:10px;height:10px;border-radius:50%}
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:16px;
+    }
+    @media (max-width: 860px){
+      .grid{grid-template-columns: 1fr;}
+      .badge{justify-content:center}
+      .top{flex-direction:column; align-items:flex-start}
+    }
+    .card{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding: 16px 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), transparent);
+      border-bottom: 1px solid var(--line);
+    }
+    .cardBody{padding: 18px;}
+    .title{font-size: 16px; margin:0 0 6px}
+    .muted{color: var(--muted); margin:0; font-size: 13px; line-height:1.5}
+    .qrBox{
+      margin-top:14px;
+      display:flex; align-items:center; justify-content:center;
+      padding: 18px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.06);
+      border: 1px dashed rgba(233,236,255,.22);
+    }
+    .qrBox img{
+      width: 340px;
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      background: #fff;
+      padding: 12px;
+    }
+    .steps{
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .step{
+      padding: 14px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(233,236,255,.12);
+    }
+    .step strong{display:block; font-size: 13px; margin-bottom: 4px}
+    .step p{margin:0; color: var(--muted); font-size: 13px; line-height:1.45}
+    .kbd{
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 2px 8px;
+      border: 1px solid rgba(233,236,255,.20);
+      border-bottom-color: rgba(233,236,255,.12);
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      display:inline-block;
+    }
+    .footer{
+      margin-top: 14px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      color: var(--muted);
+      font-size: 12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .hint{display:flex; gap:10px; align-items:center;}
+    .pill{
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(233,236,255,.12);
+    }
+    .btn{
+      appearance:none;
+      border: 1px solid rgba(233,236,255,.18);
+      background: rgba(255,255,255,.08);
+      color: var(--txt);
+      padding: 9px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-size: 13px;
+    }
+    .btn:hover{background: rgba(255,255,255,.12)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>${brand}</h1>
+          <p class="sub">${subtitle}</p>
+        </div>
+      </div>
+      <div class="badge">
+        <span class="dot" style="background:${badge.color}"></span>
+        <span>${badge.text}</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="cardHeader">
+          <h2 class="title">${title}</h2>
+          <p class="muted">Abrí WhatsApp en tu teléfono → <strong>Dispositivos vinculados</strong> → <strong>Vincular un dispositivo</strong> y escaneá.</p>
+        </div>
+        <div class="cardBody">
+          ${bodyHtml}
+          <div class="footer">
+            <div class="hint">
+              <span class="pill">Actualización automática</span>
+              <span class="pill">Acceso privado recomendado</span>
+            </div>
+            <div>
+              <button class="btn" onclick="location.reload()">Actualizar ahora</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div class="cardHeader">
+          <h2 class="title">Pasos rápidos</h2>
+          <p class="muted">Conectá WhatsApp en menos de 1 minuto.</p>
+        </div>
+        <div class="cardBody">
+          <div class="steps">
+            <div class="step">
+              <strong>1) Abrí WhatsApp</strong>
+              <p>En tu celular, andá a <span class="kbd">⋮</span> / Ajustes → <b>Dispositivos vinculados</b>.</p>
+            </div>
+            <div class="step">
+              <strong>2) Vincular un dispositivo</strong>
+              <p>Elegí <b>Vincular un dispositivo</b> y dejá la cámara lista.</p>
+            </div>
+            <div class="step">
+              <strong>3) Escaneá el QR</strong>
+              <p>Si el QR expira, esta pantalla lo renueva automáticamente.</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // refresco suave (además del meta refresh)
+    ${refreshMs ? `setTimeout(()=>location.reload(), ${refreshMs});` : ""}
+  </script>
+</body>
+</html>
+`;
+
+  // ---- estados ----
   if (ready) {
-    return res.send("<h2>✅ WhatsApp ya está conectado.</h2>");
+    return res.send(
+      page({
+        title: "✅ WhatsApp conectado",
+        badge: { text: "Conectado", color: "var(--ok)" },
+        bodyHtml: `
+          <p class="muted">Tu cuenta ya está vinculada. Si querés volver a escanear, cerrá sesión en WhatsApp Web o eliminá la sesión guardada.</p>
+        `,
+        refreshMs: 0,
+      })
+    );
   }
 
   if (!qr) {
-    // No hay QR todavía: refrescá cada 2s
-    return res.send(`
-      <h2>⏳ Esperando QR…</h2>
-      <script>setTimeout(()=>location.reload(), 2000)</script>
-    `);
+    return res.send(
+      page({
+        title: "⏳ Generando código QR…",
+        badge: { text: "Esperando QR", color: "var(--wait)" },
+        bodyHtml: `
+          <p class="muted">Aún no llegó un QR. Esto puede tardar unos segundos al iniciar el servicio.</p>
+          <div class="qrBox">
+            <div>
+              <p class="muted" style="margin:0 0 8px;">Cuando esté listo, aparecerá aquí automáticamente.</p>
+              <div class="pill">Reintentando…</div>
+            </div>
+          </div>
+        `,
+        refreshMs: 2000,
+      })
+    );
   }
 
   const dataUrl = await QRCode.toDataURL(qr, { margin: 1, scale: 8 });
 
-  res.send(`
-    <h2>Escaneá el QR de WhatsApp</h2>
-    <img src="${dataUrl}" style="max-width:360px; width:100%; height:auto;" />
-    <p>Se actualiza solo si cambia.</p>
-    <script>setTimeout(()=>location.reload(), 5000)</script>
-  `);
+  return res.send(
+    page({
+      title: "Escaneá el QR para vincular WhatsApp",
+      badge: { text: "Listo para escanear", color: "var(--ok)" },
+      bodyHtml: `
+        <div class="qrBox">
+          <img src="${dataUrl}" alt="QR de WhatsApp" />
+        </div>
+        <p class="muted" style="margin-top:12px;">
+          Consejo: mantené esta pestaña abierta. Si cambia el QR, se actualizará solo.
+        </p>
+      `,
+      refreshMs: 5000,
+    })
+  );
 });
 
 const adminIo = io.of("/admin");
