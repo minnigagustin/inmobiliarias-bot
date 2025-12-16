@@ -166,28 +166,9 @@ const server = http.createServer(app);
 const io = new Server(server, {
   maxHttpBufferSize: 10 * 1024 * 1024,
   cors: {
-    origin: (origin, cb) => {
-      // origin es p.ej. "https://br-group.com.ar" en el celu
-      const allow = new Set([
-        "https://br-group.com.ar",
-        "https://www.br-group.com.ar",
-
-        // si también lo abrís directo en backpack:
-        "https://backpackpuntaalta.ar",
-        "https://www.backpackpuntaalta.ar",
-
-        // para tests locales
-        "http://localhost",
-        "http://localhost:3000",
-
-        // algunos webviews envían null/undefined
-        undefined,
-        null,
-      ]);
-      cb(null, allow.has(origin));
-    },
+    origin: true, // ✅ permite cualquier origin
     methods: ["GET", "POST"],
-    credentials: true,
+    credentials: true, // podés dejarlo true o false
   },
 });
 
@@ -961,6 +942,19 @@ io.on("connection", async (socket) => {
         ts: Date.now(),
       });
     }
+  });
+});
+
+// Sirve el loader embebible
+app.get("/widget.js", (req, res) => {
+  res.type("application/javascript");
+  res.sendFile(path.join(__dirname, "public", "widget.js"));
+});
+
+// Página “solo widget” (chat sin layout de web)
+app.get("/widget", (req, res) => {
+  res.render("widget", {
+    COMPANY_NAME: process.env.COMPANY_NAME || "Asistente",
   });
 });
 

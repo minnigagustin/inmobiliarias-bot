@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title><%= COMPANY_NAME %> – Chat</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body{ margin:0; background:transparent; }
+    .chat-container{ height:100vh; border-radius:0; box-shadow:none; }
+  </style>
+</head>
+<body>
+  <script>
+    window.APP_CONFIG = <%- JSON.stringify({ companyName: COMPANY_NAME }) %>;
+  </script>
+
+  <div class="chat-container">
+    <header>🤖 <%= COMPANY_NAME %></header>
+    <main id="messages"></main>
+
+    <form id="input-form">
+      <button type="button" id="attach-btn" class="icon-btn" title="Enviar foto" aria-label="Enviar foto">📷</button>
+      <input id="file-input" type="file" accept="image/*" multiple hidden />
+      <input id="input" autocomplete="off" placeholder="Escribí tu mensaje…" />
+      <button type="submit">Enviar</button>
+    </form>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
