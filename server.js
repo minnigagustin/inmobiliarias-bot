@@ -954,7 +954,9 @@ app.get("/widget.js", (req, res) => {
 // Página “solo widget” (chat sin layout de web)
 app.get("/widget", (req, res) => {
   res.render("widget", {
-    COMPANY_NAME: process.env.COMPANY_NAME || "Asistente",
+    COMPANY_NAME: process.env.COMPANY_NAME || "Tu Empresa",
+    BOT_NAME: process.env.BOT_NAME || "Asistente",
+    PRIMARY_COLOR: process.env.PRIMARY_COLOR || "#4f8cff",
   });
 });
 

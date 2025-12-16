@@ -3,31 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title><%= COMPANY_NAME %> – Chat</title>
-  <link rel="stylesheet" href="/styles.css" />
-  <style>
-    body{ margin:0; background:transparent; }
-    .chat-container{ height:100vh; border-radius:0; box-shadow:none; }
-  </style>
+  <title><%= COMPANY_NAME %> – Widget</title>
+
+  <link rel="stylesheet" href="/widget/widget.css" />
 </head>
 <body>
   <script>
-    window.APP_CONFIG = <%- JSON.stringify({ companyName: COMPANY_NAME }) %>;
+    window.CHAT_WIDGET_CONFIG = <%- JSON.stringify({
+      companyName: COMPANY_NAME,
+      botName: BOT_NAME,
+      primaryColor: PRIMARY_COLOR,
+    }) %>;
   </script>
 
-  <div class="chat-container">
-    <header>🤖 <%= COMPANY_NAME %></header>
-    <main id="messages"></main>
-
-    <form id="input-form">
-      <button type="button" id="attach-btn" class="icon-btn" title="Enviar foto" aria-label="Enviar foto">📷</button>
-      <input id="file-input" type="file" accept="image/*" multiple hidden />
-      <input id="input" autocomplete="off" placeholder="Escribí tu mensaje…" />
-      <button type="submit">Enviar</button>
-    </form>
-  </div>
-
+  <!-- socket.io del server -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js"></script>
+  <script src="/widget/widget.js" defer></script>
 </body>
 </html>
