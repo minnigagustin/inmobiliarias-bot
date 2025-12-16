@@ -1,7 +1,6 @@
 // server.js — Web chat + botones + Panel Admin con handoff en vivo
 const express = require("express");
 const http = require("http");
-const https = require("https");
 const { Server } = require("socket.io");
 const path = require("path");
 const fs = require("fs");
@@ -168,7 +167,7 @@ var options = {
   ),
 };
 
-const server = https.createServer(options, app);
+const server = http.createServer(app);
 const io = new Server(server, {
   maxHttpBufferSize: 10 * 1024 * 1024,
   cors: {
