@@ -3,6 +3,9 @@
 
 const socket = io();
 
+const APP = window.APP_CONFIG || {};
+const COMPANY_NAME = APP.companyName || "Asistente";
+
 const messagesEl = document.getElementById("messages");
 const form = document.getElementById("input-form");
 const input = document.getElementById("input");
@@ -99,7 +102,7 @@ function showTyping() {
   wrap.className = "msg typing";
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.innerHTML = `<span class="dots"><i></i><i></i><i></i></span> <span class="small">BR-Group está escribiendo…</span>`;
+  bubble.innerHTML = `<span class="dots"><i></i><i></i><i></i></span> <span class="small">${COMPANY_NAME} está escribiendo…</span>`;
   wrap.appendChild(bubble);
   messagesEl.appendChild(wrap);
   scrollToBottom();

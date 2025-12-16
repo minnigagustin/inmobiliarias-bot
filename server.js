@@ -202,6 +202,15 @@ io.engine.on("connection_error", (err) => {
 app.use(express.static(path.join(__dirname, "public")));
 const uploadsDir = path.join(__dirname, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+
+app.get("/", (req, res) => {
+  res.render("index", {
+    COMPANY_NAME: process.env.COMPANY_NAME || "BR-Group",
+  });
+});
 app.use("/uploads", express.static(uploadsDir, { maxAge: "7d" }));
 
 app.get("/qr-code", async (req, res) => {
