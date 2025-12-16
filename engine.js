@@ -7,6 +7,9 @@
 const { classifyIntent, answerFAQ } = require("./nlp");
 const { preIntent } = require("./nlu_pre");
 
+const COMPANY_NAME = process.env.COMPANY_NAME || "Tu inmobiliaria";
+const BOT_NAME = process.env.BOT_NAME || "asistente virtual";
+
 // ===== Estado =====
 const sessions = new Map(); // chatId -> { step, data, history: [] }
 function getSession(chatId) {
@@ -478,10 +481,9 @@ Coordinamos una visita sin costo para estimar el valor. ¿Querés que te contact
 // ===== Textos =====
 function mainMenuText() {
   return [
-    "👋 Hola, soy el asistente virtual de BR-Group Soluciones en Tecnología.",
-    "Podés probar cómo funciona nuestro bot para inmobiliarias.",
-    "",
+    `👋 Hola, soy ${BOT_NAME} de ${COMPANY_NAME}.`,
     "¿En qué podemos ayudarte hoy?",
+    "",
     "Opciones principales:",
     "1. Administración de alquileres",
     "2. Consulta de propiedades",
@@ -491,6 +493,7 @@ function mainMenuText() {
     "o simplemente el número (ej.: 1, 2 o 3).",
   ].join("\n");
 }
+
 function alquileresMenuText() {
   return [
     "Opciones de administración de alquileres:",
