@@ -1,17 +1,23 @@
-// wa-qr-store.js
-let lastQR = null;
-let ready = false;
+const fs = require("fs");
+const path = require("path");
+const FILE = path.join(__dirname, ".wa-qr.json");
+
+function write(obj) {
+  fs.writeFileSync(FILE, JSON.stringify(obj), "utf8");
+}
 
 module.exports = {
   setQR(qr) {
-    lastQR = qr;
-    ready = false;
+    write({ qr, ready: false, ts: Date.now() });
   },
   setReady() {
-    ready = true;
-    lastQR = null;
+    write({ qr: null, ready: true, ts: Date.now() });
   },
   get() {
-    return { qr: lastQR, ready };
+    try {
+      return JSON.parse(fs.readFileSync(FILE, "utf8"));
+    } catch {
+      return { qr: null, ready: false };
+    }
   },
 };
