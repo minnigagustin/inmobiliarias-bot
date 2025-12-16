@@ -4,6 +4,9 @@ const http = require("http");
 const { Server } = require("socket.io");
 const path = require("path");
 const fs = require("fs");
+const QRCode = require("qrcode");
+const qrStore = require("./wa-qr-store");
+
 require("dotenv").config();
 
 // 👇 Importa helpers IA adicionales desde engine.js
@@ -200,6 +203,36 @@ app.use(express.static(path.join(__dirname, "public")));
 const uploadsDir = path.join(__dirname, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use("/uploads", express.static(uploadsDir, { maxAge: "7d" }));
+
+app.get("/qr-code", async (req, res) => {
+  const { qr, ready } = qrStore.get();
+
+  // (Opcional) proteger con token simple
+  // if (process.env.ADMIN_TOKEN && req.query.token !== process.env.ADMIN_TOKEN) {
+  //   return res.status(401).send("unauthorized");
+  // }
+
+  if (ready) {
+    return res.send("<h2>✅ WhatsApp ya está conectado.</h2>");
+  }
+
+  if (!qr) {
+    // No hay QR todavía: refrescá cada 2s
+    return res.send(`
+      <h2>⏳ Esperando QR…</h2>
+      <script>setTimeout(()=>location.reload(), 2000)</script>
+    `);
+  }
+
+  const dataUrl = await QRCode.toDataURL(qr, { margin: 1, scale: 8 });
+
+  res.send(`
+    <h2>Escaneá el QR de WhatsApp</h2>
+    <img src="${dataUrl}" style="max-width:360px; width:100%; height:auto;" />
+    <p>Se actualiza solo si cambia.</p>
+    <script>setTimeout(()=>location.reload(), 5000)</script>
+  `);
+});
 
 const adminIo = io.of("/admin");
 

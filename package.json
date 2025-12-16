@@ -13,15 +13,16 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "concurrently": "^8.2.2",
     "dotenv": "^16.4.5",
     "es-compromise": "^0.2.11",
     "express": "^4.19.2",
     "lodash.deburr": "^4.1.0",
     "openai": "^4.58.1",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.8.1",
-    "whatsapp-web.js": "^1.32.0",
-    "concurrently": "^8.2.2"
+    "whatsapp-web.js": "^1.32.0"
   }
 }

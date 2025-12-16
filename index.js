@@ -3,6 +3,7 @@ const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
+const qrStore = require("./wa-qr-store");
 require("dotenv").config();
 
 const {
@@ -187,8 +188,16 @@ const client = new Client({
     timeout: 0,
   },
 });
-client.on("qr", (qr) => qrcode.generate(qr, { small: true }));
-client.on("ready", () => console.log("✅ WhatsApp listo"));
+client.on("qr", (qr) => {
+  qrStore.setQR(qr);
+  // si querés seguir mostrando en consola:
+  qrcode.generate(qr, { small: true });
+});
+
+client.on("ready", () => {
+  qrStore.setReady();
+  console.log("✅ WhatsApp listo");
+});
 
 /** Cache de media por chat para reenviarlas al agente por WhatsApp (opcional) */
 const mediaCache = new Map(); // Map<chatId, Array<MessageMedia>>
