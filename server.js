@@ -158,14 +158,6 @@ function scheduleAIModeTimeout(chatId, untilTs) {
 
 /* ====================== Server & Sockets ====================== */
 const app = express();
-var options = {
-  key: fs.readFileSync(
-    "/etc/letsencrypt/live/backpackpuntaalta.ar/privkey.pem"
-  ),
-  cert: fs.readFileSync(
-    "/etc/letsencrypt/live/backpackpuntaalta.ar/fullchain.pem"
-  ),
-};
 
 const server = http.createServer(app);
 const io = new Server(server, {
