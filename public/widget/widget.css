@@ -314,20 +314,76 @@ html, body{
     right: 0;
     bottom: 0;
     width: 100vw;
-    height: 100vh;
-    max-height: 100vh;
+
+    height: 100dvh;      /* 🔥 CLAVE */
+    max-height: 100dvh; /* 🔥 CLAVE */
+
     border-radius: 0;
     border-left: none;
     border-right: none;
     border-bottom: none;
   }
+
   .cw-launcher{
     right: 14px;
     bottom: 14px;
   }
 
-  /* iOS safe areas */
   .cw-inputbar{
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
+}
+
+/* =========================
+   Animaciones premium
+   ========================= */
+
+/* Panel open */
+.cw-panel.is-open{
+  animation: cw-open .28s cubic-bezier(.2,.9,.2,1);
+}
+
+@keyframes cw-open{
+  from{
+    opacity: 0;
+    transform: translateY(24px) scale(.96);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Mensajes */
+.cw-msg{
+  animation: cw-msg-in .18s ease-out;
+}
+
+@keyframes cw-msg-in{
+  from{
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Launcher pulse */
+@keyframes cw-pulse{
+  0%{ box-shadow: 0 0 0 0 rgba(37,99,235,.35); }
+  70%{ box-shadow: 0 0 0 12px rgba(37,99,235,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+}
+
+.cw-launcher{
+  animation: cw-pulse 2.5s infinite;
+}
+
+/* Hover micro-interactions */
+.cw-send:hover,
+.cw-attach:hover,
+.cw-btn:hover{
+  transform: translateY(-1px);
 }
