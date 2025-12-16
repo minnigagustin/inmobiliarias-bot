@@ -4,19 +4,23 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title><%= COMPANY_NAME %> – Widget</title>
-
   <link rel="stylesheet" href="/widget/widget.css" />
 </head>
 <body>
   <script>
+    const qs = new URLSearchParams(location.search);
     window.CHAT_WIDGET_CONFIG = <%- JSON.stringify({
       companyName: COMPANY_NAME,
       botName: BOT_NAME,
       primaryColor: PRIMARY_COLOR,
     }) %>;
+
+    // override por query
+    if (qs.get("company")) window.CHAT_WIDGET_CONFIG.companyName = qs.get("company");
+    if (qs.get("bot")) window.CHAT_WIDGET_CONFIG.botName = qs.get("bot");
+    if (qs.get("color")) window.CHAT_WIDGET_CONFIG.primaryColor = qs.get("color");
   </script>
 
-  <!-- socket.io del server -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/widget/widget.js" defer></script>
 </body>
