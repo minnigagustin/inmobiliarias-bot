@@ -41,6 +41,31 @@ const NLU_STEPS = new Set([
 ]);
 
 // ===== Helpers =====
+
+function isSkip(text) {
+  const t = String(text || "")
+    .trim()
+    .toLowerCase();
+  return (
+    t === "." ||
+    t === "-" ||
+    t === "—" ||
+    t === "ninguno" ||
+    t === "ninguna" ||
+    t === "no" ||
+    t === "nop" ||
+    t === "na" ||
+    t === "n/a" ||
+    t === "no tengo" ||
+    t === "cualquiera" ||
+    t === "indistinto" ||
+    t === "da igual"
+  );
+}
+function asOptionalText(text) {
+  return isSkip(text) ? null : String(text || "").trim();
+}
+
 function fmtCurrency(n) {
   if (typeof n !== "number" || isNaN(n)) return n;
   return new Intl.NumberFormat("es-AR", {
@@ -1390,11 +1415,13 @@ async function handleText({ chatId, text }) {
       break;
     }
     case "prop_zona": {
-      s.data.prop.zona = bodyRaw;
+      const zona = asOptionalText(bodyRaw);
+      s.data.prop.zona = zona; // null => sin filtro
       s.step = "prop_dorm";
       replies.push("🛏️ Dormitorios (número):");
       break;
     }
+
     case "prop_dorm": {
       const d = parseInt(bodyRaw, 10);
       if (isNaN(d) || d < 0) replies.push("Ingresá un número (0,1,2,3...).");
@@ -1478,31 +1505,38 @@ async function handleText({ chatId, text }) {
       break;
     }
     case "prop_comodidades": {
-      s.data.prop.comodidades = bodyRaw;
+      s.data.prop.comodidades = asOptionalText(bodyRaw);
 
-      // 1) Traemos un “pool” desde WP
-      // (Si tu WP no indexa bien la zona en título/contenido, podés buscar vacío y filtrar acá)
-      const pool = await searchProperties({
-        search: s.data.prop.zona || "",
-        perPage: 30,
-        page: 1,
-      });
-
-      // 2) Filtrado en Node (MVP)
       const cur = s.data.prop.moneda || "ARS";
       const budget = Number(s.data.prop.presupuesto || 0);
-      const dorm = Number(s.data.prop.dorm || 0);
-      const banos = Number(s.data.prop.banos || 0);
-      const cochera = (s.data.prop.cochera || "").toLowerCase().includes("sí");
 
-      // OJO: si tus publicaciones mezclan ARS y USD, acá conviene mostrar “solo misma moneda”
-      const filtered = pool
-        .filter((p) => p.currency === cur)
-        .filter((p) => !budget || !p.price || p.price <= budget * 1.15) // +15% tolerancia
-        .filter((p) => p.bedrooms >= dorm)
-        .filter((p) => p.bathrooms >= banos)
-        .filter((p) => !cochera || p.garage >= 1)
-        .slice(0, 5);
+      // 1) intento con ciudad si existe
+      let resp = await searchProperties({
+        opText: s.data.prop.op,
+        tipoText: s.data.prop.tipo,
+        cityText: s.data.prop.zona, // null => sin filtro
+        perPage: 30,
+        page: 1,
+        budget,
+        currency: cur,
+        tolerancePct: 15,
+      });
+
+      // 2) fallback: si NO hubo nada y el user había puesto zona, probamos sin ciudad
+      if (!resp.results.length && s.data.prop.zona) {
+        resp = await searchProperties({
+          opText: s.data.prop.op,
+          tipoText: s.data.prop.tipo,
+          cityText: null,
+          perPage: 30,
+          page: 1,
+          budget,
+          currency: cur,
+          tolerancePct: 15,
+        });
+      }
+
+      const filtered = resp.results.slice(0, 5);
 
       if (!filtered.length) {
         replies.push(
@@ -1513,7 +1547,6 @@ async function handleText({ chatId, text }) {
         break;
       }
 
-      // 3) Respuesta al usuario
       const lines = filtered.map(
         (p, i) =>
           `${i + 1}) ${p.title} – ${fmtAmount(p.price, p.currency)}\n   ${
