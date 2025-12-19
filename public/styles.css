@@ -166,3 +166,88 @@ dialog#nameDialog {
   padding: 16px;
 }
 dialog::backdrop { background: rgba(0,0,0,.45); }
+/* ===== Cards de propiedades ===== */
+.bubble.prop-cards {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.prop-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .prop-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.prop-card {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(11,18,36,.85);
+  box-shadow: 0 10px 26px rgba(0,0,0,.25);
+}
+
+.prop-img {
+  height: 160px;
+  background-size: cover;
+  background-position: center;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.prop-img.noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-weight: 700;
+  background: rgba(255,255,255,.04);
+}
+
+.prop-body {
+  padding: 12px 12px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.prop-title {
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.prop-price {
+  font-weight: 800;
+  color: rgba(34,211,238,.95);
+}
+
+.prop-excerpt {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.prop-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.prop-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(34,211,238,.16);
+  border: 1px solid rgba(34,211,238,.35);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+}
+.prop-link:hover { filter: brightness(1.06); }

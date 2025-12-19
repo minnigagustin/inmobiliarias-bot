@@ -574,6 +574,18 @@ Por email, acceso web o copia impresa.
 `;
 }
 
+function fmtPropCard(p) {
+  const imgLine = p.image ? `📷 Foto: ${p.image}\n` : "";
+  const desc = p.excerpt ? `📝 ${p.excerpt}\n` : "";
+  return (
+    `🏠 *${p.title}*\n` +
+    `💰 *${fmtAmount(p.price, p.currency)}*\n` +
+    imgLine +
+    desc +
+    `🔗 Ver publicación: ${p.link}`
+  );
+}
+
 // ===== Intent handler (NLU) =====
 async function handleNLUIntent(nlu, s) {
   const replies = [];
@@ -1510,11 +1522,10 @@ async function handleText({ chatId, text }) {
       const cur = s.data.prop.moneda || "ARS";
       const budget = Number(s.data.prop.presupuesto || 0);
 
-      // 1) intento con ciudad si existe
       let resp = await searchProperties({
         opText: s.data.prop.op,
         tipoText: s.data.prop.tipo,
-        cityText: s.data.prop.zona, // null => sin filtro
+        cityText: s.data.prop.zona,
         perPage: 30,
         page: 1,
         budget,
@@ -1522,7 +1533,6 @@ async function handleText({ chatId, text }) {
         tolerancePct: 15,
       });
 
-      // 2) fallback: si NO hubo nada y el user había puesto zona, probamos sin ciudad
       if (!resp.results.length && s.data.prop.zona) {
         resp = await searchProperties({
           opText: s.data.prop.op,
@@ -1547,20 +1557,34 @@ async function handleText({ chatId, text }) {
         break;
       }
 
-      const lines = filtered.map(
-        (p, i) =>
-          `${i + 1}) ${p.title} – ${fmtAmount(p.price, p.currency)}\n   ${
-            p.link
-          }`
-      );
+      // 👇 NUEVO: data UI para Webchat (cards)
+      const ui = {
+        cards: filtered.map((p) => ({
+          id: p.id,
+          title: p.title,
+          priceText: fmtAmount(p.price, p.currency),
+          excerpt: p.excerpt || "",
+          image: p.image || null,
+          link: p.link,
+        })),
+      };
 
       replies.push(
-        `🔎 Resultados (WordPress):\n${lines.join(
-          "\n"
-        )}\n\n¿Querés que un asesor te contacte? (sí/no)`
+        `Perfecto 🙌 Con tu presupuesto de *${fmtAmount(budget, cur)}* en *${
+          s.data.prop.zona || "la zona que indiques"
+        }*, estas son las mejores oportunidades que encontré:`
+      );
+
+      // WhatsApp / fallback: seguimos mandando texto
+      for (const p of filtered) replies.push(fmtPropCard(p));
+
+      replies.push(
+        "¿Querés que un asesor te contacte para coordinar visita? (sí/no)"
       );
       s.step = "prop_buscar_derivar";
-      break;
+
+      // ✅ IMPORTANT: retornar UI junto con replies
+      return { replies, notifyAgent, session: s, ui };
     }
 
     case "prop_buscar_derivar": {

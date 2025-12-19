@@ -2,6 +2,7 @@
 const WP_BASE = process.env.WP_BASE || "https://lginmobiliaria.com.ar";
 const WP_TIMEOUT_MS = Number(process.env.WP_TIMEOUT_MS || 9000);
 const CACHE_TTL_MS = Number(process.env.WP_CACHE_TTL_MS || 10 * 60 * 1000);
+const he = require("he");
 
 // REST bases (según tus endpoints)
 const TAX_TIPO = "tipos-propiedad";
@@ -147,6 +148,11 @@ function extractPrice(p) {
 }
 
 // ----------------- Map WP post a objeto simple -----------------
+function getFeaturedImage(p) {
+  const fm = p?._embedded?.["wp:featuredmedia"]?.[0];
+  return fm?.source_url || fm?.media_details?.sizes?.medium?.source_url || null;
+}
+
 function mapProperty(p) {
   const { price, currency, prefix } = extractPrice(p);
   return {
@@ -154,7 +160,7 @@ function mapProperty(p) {
     title: p?.title?.rendered ? stripHtml(p.title.rendered) : "Propiedad",
     link: p.link,
     excerpt: p?.excerpt?.rendered ? stripHtml(p.excerpt.rendered) : "",
-    featured_media: p.featured_media,
+    image: getFeaturedImage(p), // ✅ NUEVO
     price,
     currency: currency || "ARS",
     price_prefix: prefix,
@@ -163,8 +169,10 @@ function mapProperty(p) {
 }
 
 function stripHtml(s) {
-  return String(s || "")
+  return he
+    .decode(String(s || "")) // ✅ decodifica &#8211; etc.
     .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 

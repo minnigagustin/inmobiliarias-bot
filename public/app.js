@@ -94,6 +94,74 @@ function addButtons(buttons) {
   scrollToBottom();
 }
 
+function addPropertyCards(cards) {
+  if (!Array.isArray(cards) || !cards.length) return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "msg"; // bot
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble prop-cards";
+
+  const grid = document.createElement("div");
+  grid.className = "prop-grid";
+
+  cards.forEach((c) => {
+    const card = document.createElement("div");
+    card.className = "prop-card";
+
+    const img = document.createElement("div");
+    img.className = "prop-img";
+    if (c.image) {
+      img.style.backgroundImage = `url("${c.image}")`;
+    } else {
+      img.classList.add("noimg");
+      img.textContent = "Sin foto";
+    }
+
+    const body = document.createElement("div");
+    body.className = "prop-body";
+
+    const title = document.createElement("div");
+    title.className = "prop-title";
+    title.textContent = c.title || "Propiedad";
+
+    const price = document.createElement("div");
+    price.className = "prop-price";
+    price.textContent = c.priceText || "";
+
+    const ex = document.createElement("div");
+    ex.className = "prop-excerpt";
+    ex.textContent = c.excerpt || "";
+
+    const actions = document.createElement("div");
+    actions.className = "prop-actions";
+
+    const link = document.createElement("a");
+    link.className = "prop-link";
+    link.href = c.link;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Ver publicación";
+
+    actions.appendChild(link);
+
+    body.appendChild(title);
+    body.appendChild(price);
+    if (c.excerpt) body.appendChild(ex);
+    body.appendChild(actions);
+
+    card.appendChild(img);
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+
+  bubble.appendChild(grid);
+  wrap.appendChild(bubble);
+  messagesEl.appendChild(wrap);
+  scrollToBottom();
+}
+
 /* --------------------- Indicador de escritura -------------------- */
 let typingTimer = null;
 function showTyping() {
@@ -183,7 +251,17 @@ function hideHumanBanner() {
 /* --------------------------- Sockets ----------------------------- */
 socket.on("bot_message", (msg) => {
   stopTyping();
+
+  // ✅ Cards
+  if (msg.type === "property_cards" && Array.isArray(msg.cards)) {
+    addPropertyCards(msg.cards);
+    return;
+  }
+
+  // Texto normal
   if (msg.text) addMessage(msg.text, "bot");
+
+  // Botones
   if (Array.isArray(msg.buttons) && msg.buttons.length) addButtons(msg.buttons);
 });
 

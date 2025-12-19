@@ -732,7 +732,7 @@ io.on("connection", async (socket) => {
     if (humanChats.has(socket.id)) return;
 
     // bot
-    const { replies, notifyAgent, session, aiSignal } = await handleText({
+    const { replies, notifyAgent, session, aiSignal, ui } = await handleText({
       chatId: socket.id,
       text,
     });
@@ -752,6 +752,16 @@ io.on("connection", async (socket) => {
         type: "text",
       });
     });
+
+    if (ui?.cards?.length) {
+      socket.emit("bot_message", { type: "property_cards", cards: ui.cards });
+      pushTranscript(socket.id, {
+        who: "bot",
+        text: "[property_cards]",
+        ts: Date.now(),
+        type: "property_cards",
+      });
+    }
 
     // Programación / limpieza de timer IA según señal del engine
     if (aiSignal?.mode === "on" || aiSignal?.mode === "extend") {
