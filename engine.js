@@ -6,6 +6,7 @@
 
 const { classifyIntent, answerFAQ } = require("./nlp");
 const { preIntent } = require("./nlu_pre");
+const { searchProperties } = require("./wpProperties");
 
 const COMPANY_NAME = process.env.COMPANY_NAME || "Tu inmobiliaria";
 const BOT_NAME = process.env.BOT_NAME || "asistente virtual";
@@ -1478,39 +1479,52 @@ async function handleText({ chatId, text }) {
     }
     case "prop_comodidades": {
       s.data.prop.comodidades = bodyRaw;
-      const cur = s.data.prop.moneda || "ARS";
-      const base = s.data.prop.presupuesto;
 
-      const demo = [
-        {
-          titulo: "Depto 2 amb. c/balcón – Centro",
-          precio: fmtAmount(base, cur),
-        },
-        {
-          titulo: "PH 3 amb. c/patio – Barrio Norte",
-          precio: fmtAmount(base * 1.1, cur),
-        },
-        {
-          titulo: "Casa 3 dorm. c/cochera – Oeste",
-          precio: fmtAmount(base * 1.3, cur),
-        },
-      ];
+      // 1) Traemos un “pool” desde WP
+      // (Si tu WP no indexa bien la zona en título/contenido, podés buscar vacío y filtrar acá)
+      const pool = await searchProperties({
+        search: s.data.prop.zona || "",
+        perPage: 30,
+        page: 1,
+      });
+
+      // 2) Filtrado en Node (MVP)
+      const cur = s.data.prop.moneda || "ARS";
+      const budget = Number(s.data.prop.presupuesto || 0);
+      const dorm = Number(s.data.prop.dorm || 0);
+      const banos = Number(s.data.prop.banos || 0);
+      const cochera = (s.data.prop.cochera || "").toLowerCase().includes("sí");
+
+      // OJO: si tus publicaciones mezclan ARS y USD, acá conviene mostrar “solo misma moneda”
+      const filtered = pool
+        .filter((p) => p.currency === cur)
+        .filter((p) => !budget || !p.price || p.price <= budget * 1.15) // +15% tolerancia
+        .filter((p) => p.bedrooms >= dorm)
+        .filter((p) => p.bathrooms >= banos)
+        .filter((p) => !cochera || p.garage >= 1)
+        .slice(0, 5);
+
+      if (!filtered.length) {
+        replies.push(
+          "No encontré coincidencias con esos filtros en este momento. " +
+            "¿Querés ampliar presupuesto / cambiar zona / o hablar con un asesor? (sí/no)"
+        );
+        s.step = "prop_buscar_derivar";
+        break;
+      }
+
+      // 3) Respuesta al usuario
+      const lines = filtered.map(
+        (p, i) =>
+          `${i + 1}) ${p.title} – ${fmtAmount(p.price, p.currency)}\n   ${
+            p.link
+          }`
+      );
 
       replies.push(
-        `🔎 Búsqueda *${s.data.prop.op}* – *${s.data.prop.tipo}*
-• Presupuesto: ${fmtAmount(base, cur)}
-• Zona: ${s.data.prop.zona}
-• Dorm: ${s.data.prop.dorm} | Baños: ${s.data.prop.banos} | Cochera: ${
-          s.data.prop.cochera
-        }
-• Comodidades: ${s.data.prop.comodidades}
-
-📄 Resultados (demo):
-1) ${demo[0].titulo} – ${demo[0].precio}
-2) ${demo[1].titulo} – ${demo[1].precio}
-3) ${demo[2].titulo} – ${demo[2].precio}
-
-¿Querés que un asesor te contacte? (sí/no)`
+        `🔎 Resultados (WordPress):\n${lines.join(
+          "\n"
+        )}\n\n¿Querés que un asesor te contacte? (sí/no)`
       );
       s.step = "prop_buscar_derivar";
       break;
