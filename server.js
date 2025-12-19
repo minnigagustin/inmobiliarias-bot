@@ -683,6 +683,7 @@ io.on("connection", async (socket) => {
   const { replies, session } = await handleText({
     chatId: socket.id,
     text: "menu",
+    channel: "web",
   });
 
   replies.forEach((t) => {
@@ -735,6 +736,7 @@ io.on("connection", async (socket) => {
     const { replies, notifyAgent, session, aiSignal, ui } = await handleText({
       chatId: socket.id,
       text,
+      channel: "web",
     });
 
     replies.forEach((t) => {

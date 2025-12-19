@@ -741,7 +741,7 @@ async function handleImage({ chatId, file }) {
 }
 
 // ===== Main handleText (con soporte de menús numéricos 1–3 y 1–5) =====
-async function handleText({ chatId, text }) {
+async function handleText({ chatId, text, channel = "wa" }) {
   const s = getSession(chatId);
   pushHistory(s, text);
 
@@ -1576,7 +1576,9 @@ async function handleText({ chatId, text }) {
       );
 
       // WhatsApp / fallback: seguimos mandando texto
-      for (const p of filtered) replies.push(fmtPropCard(p));
+      if (channel !== "web") {
+        for (const p of filtered) replies.push(fmtPropCard(p));
+      }
 
       replies.push(
         "¿Querés que un asesor te contacte para coordinar visita? (sí/no)"
