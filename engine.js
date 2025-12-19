@@ -6,7 +6,7 @@
 
 const { classifyIntent, answerFAQ } = require("./nlp");
 const { preIntent } = require("./nlu_pre");
-const { searchProperties } = require("./wpProperties");
+const { searchProperties, listCities } = require("./wpProperties");
 
 const COMPANY_NAME = process.env.COMPANY_NAME || "Tu inmobiliaria";
 const BOT_NAME = process.env.BOT_NAME || "asistente virtual";
@@ -1078,9 +1078,8 @@ async function handleText({ chatId, text, channel = "wa" }) {
       if (p > 0) {
         s.data.prop = s.data.prop || { op: s.data.op || "alquilar" };
         s.data.prop.presupuesto = p;
-        s.step = "prop_zona";
-        replies.push(`💰 Tomé tu presupuesto: ${fmtCurrency(p)}`);
-        replies.push("📍 Zona / barrio preferido:");
+        s.step = "prop_moneda";
+        replies.push(currencyMenuText("presupuesto"));
         return { replies, notifyAgent, session: s };
       }
     }
@@ -1421,14 +1420,75 @@ async function handleText({ chatId, text, channel = "wa" }) {
         replies.push(currencyMenuText("presupuesto"));
       } else {
         s.data.prop.moneda = cur; // "ARS" | "USD"
-        s.step = "prop_zona";
-        replies.push("📍 Zona / barrio preferido:");
+        s.step = "prop_ciudad";
+        replies.push("📍 Elegí la *ciudad*:");
       }
       break;
     }
-    case "prop_zona": {
-      const zona = asOptionalText(bodyRaw);
-      s.data.prop.zona = zona; // null => sin filtro
+    case "prop_ciudad": {
+      // 1) Si aún no cargamos opciones, las pedimos a WP y mostramos menú
+      if (!Array.isArray(s.data.cityOptions) || !s.data.cityOptions.length) {
+        const cities = await listCities();
+
+        if (!cities.length) {
+          replies.push(
+            "No pude cargar ciudades. Escribí la ciudad igual (texto):"
+          );
+          s.step = "prop_ciudad_free";
+          break;
+        }
+
+        s.data.cityOptions = cities;
+
+        const top = cities.slice(0, 10);
+        replies.push(
+          [
+            "Elegí una opción:",
+            ...top.map((c, i) => `${i + 1}) ${c.name}`),
+          ].join("\n")
+        );
+        replies.push("Tip: respondé el número (1-10) o escribí el nombre.");
+        break;
+      }
+
+      // 2) Ya hay opciones → procesar elección del usuario
+      const opts = s.data.cityOptions;
+      const top = opts.slice(0, 10);
+
+      const n = pickMenuNumberLocal(bodyRaw, 10);
+      let chosen = null;
+
+      if (n && top[n - 1]) {
+        chosen = top[n - 1].name;
+      } else {
+        const q = bodyRaw.trim().toLowerCase();
+        chosen =
+          top.find((c) => c.name.toLowerCase() === q)?.name ||
+          opts.find((c) => c.name.toLowerCase() === q)?.name ||
+          null;
+      }
+
+      if (!chosen) {
+        replies.push(
+          "No te entendí. Respondé con el número (1-10) o el nombre."
+        );
+        break;
+      }
+
+      s.data.prop = s.data.prop || {};
+      s.data.prop.city = chosen;
+
+      // ya no necesitamos las opciones guardadas
+      delete s.data.cityOptions;
+
+      s.step = "prop_dorm";
+      replies.push(`📍 Ciudad: *${chosen}*`);
+      replies.push("🛏️ Dormitorios (número):");
+      break;
+    }
+
+    case "prop_ciudad_free": {
+      s.data.prop.city = bodyRaw.trim();
       s.step = "prop_dorm";
       replies.push("🛏️ Dormitorios (número):");
       break;
@@ -1455,14 +1515,80 @@ async function handleText({ chatId, text, channel = "wa" }) {
       break;
     }
     case "prop_cochera": {
-      s.data.prop.cochera = ["si", "sí", "yes", "ok"].includes(body)
-        ? "Sí"
-        : "No";
-      s.step = "prop_comodidades";
+      const yn = parseYesNo(bodyRaw);
+      s.data.prop.cochera = yn === "yes" ? "Sí" : yn === "no" ? "No" : null;
+
+      if (!s.data.prop.cochera) {
+        replies.push('Respondé "sí" o "no", por favor.');
+        break;
+      }
+
+      // ✅ saltamos comodidades y buscamos acá
+      const cur = s.data.prop.moneda || "ARS";
+      const budget = Number(s.data.prop.presupuesto || 0);
+
+      let resp = await searchProperties({
+        opText: s.data.prop.op,
+        tipoText: s.data.prop.tipo,
+        cityText: s.data.prop.city,
+        perPage: 30,
+        page: 1,
+        budget,
+        currency: cur,
+        tolerancePct: 15,
+      });
+
+      if (!resp.results.length && s.data.prop.city) {
+        resp = await searchProperties({
+          opText: s.data.prop.op,
+          tipoText: s.data.prop.tipo,
+          cityText: null,
+          perPage: 30,
+          page: 1,
+          budget,
+          currency: cur,
+          tolerancePct: 15,
+        });
+      }
+
+      const filtered = resp.results.slice(0, 5);
+
+      if (!filtered.length) {
+        replies.push(
+          "No encontré coincidencias con esos filtros en este momento. " +
+            "¿Querés ampliar presupuesto / cambiar ciudad / o hablar con un asesor? (sí/no)"
+        );
+        s.step = "prop_buscar_derivar";
+        break;
+      }
+
+      const ui = {
+        cards: filtered.map((p) => ({
+          id: p.id,
+          title: p.title,
+          priceText: fmtAmount(p.price, p.currency),
+          excerpt: p.excerpt || "",
+          image: p.image || null,
+          link: p.link,
+        })),
+      };
+
       replies.push(
-        "🧩 Comodidades (ej: balcón, patio, parrilla). Podés listar varias:"
+        `Perfecto 🙌 Con tu presupuesto de *${fmtAmount(budget, cur)}* en *${
+          s.data.prop.city || "la ciudad que indiques"
+        }*, estas son las mejores oportunidades que encontré:`
       );
-      break;
+
+      if (channel !== "web") {
+        for (const p of filtered) replies.push(fmtPropCard(p));
+      }
+
+      replies.push(
+        "¿Querés que un asesor te contacte para coordinar visita? (sí/no)"
+      );
+      s.step = "prop_buscar_derivar";
+
+      return { replies, notifyAgent, session: s, ui };
     }
 
     // --------- Venta de propiedad ---------
@@ -1525,7 +1651,7 @@ async function handleText({ chatId, text, channel = "wa" }) {
       let resp = await searchProperties({
         opText: s.data.prop.op,
         tipoText: s.data.prop.tipo,
-        cityText: s.data.prop.zona,
+        cityText: s.data.prop.city,
         perPage: 30,
         page: 1,
         budget,
@@ -1533,7 +1659,7 @@ async function handleText({ chatId, text, channel = "wa" }) {
         tolerancePct: 15,
       });
 
-      if (!resp.results.length && s.data.prop.zona) {
+      if (!resp.results.length && s.data.prop.city) {
         resp = await searchProperties({
           opText: s.data.prop.op,
           tipoText: s.data.prop.tipo,
@@ -1571,7 +1697,7 @@ async function handleText({ chatId, text, channel = "wa" }) {
 
       replies.push(
         `Perfecto 🙌 Con tu presupuesto de *${fmtAmount(budget, cur)}* en *${
-          s.data.prop.zona || "la zona que indiques"
+          s.data.prop.city || "la ciudad que indiques"
         }*, estas son las mejores oportunidades que encontré:`
       );
 

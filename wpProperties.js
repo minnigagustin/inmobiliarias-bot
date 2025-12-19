@@ -262,6 +262,16 @@ async function searchProperties({
   };
 }
 
+async function listCities() {
+  const idx = await getTermsIndex(TAX_CITY);
+  return (idx?.list || []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    slug: t.slug,
+  }));
+}
+
 module.exports = {
   searchProperties,
+  listCities,
 };

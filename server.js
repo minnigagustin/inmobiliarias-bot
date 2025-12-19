@@ -99,7 +99,14 @@ function buildButtonsForStep(session) {
         { label: "1. Pesos (ARS)", value: "1" },
         { label: "2. Dólares (USD)", value: "2" },
       ];
-
+    case "prop_ciudad": {
+      const opts = session?.data?.cityOptions || [];
+      const top = opts.slice(0, 10);
+      return top.map((c, i) => ({
+        label: `${i + 1}. ${c.name}`,
+        value: String(i + 1),
+      }));
+    }
     default:
       return null;
   }
