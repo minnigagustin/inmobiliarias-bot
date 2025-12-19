@@ -1418,13 +1418,36 @@ async function handleText({ chatId, text, channel = "wa" }) {
       const cur = parseCurrency(bodyRaw);
       if (!cur) {
         replies.push(currencyMenuText("presupuesto"));
-      } else {
-        s.data.prop.moneda = cur; // "ARS" | "USD"
-        s.step = "prop_ciudad";
-        replies.push("📍 Elegí la *ciudad*:");
+        break;
       }
+
+      s.data.prop.moneda = cur; // "ARS" | "USD"
+      s.step = "prop_ciudad";
+
+      // ✅ precargar ciudades para que el webchat muestre botones al instante
+      const cities = await listCities();
+
+      if (!cities.length) {
+        replies.push(
+          "No pude cargar ciudades. Escribí la ciudad igual (texto):"
+        );
+        s.step = "prop_ciudad_free";
+        break;
+      }
+
+      s.data.cityOptions = cities;
+
+      const top = cities.slice(0, 10);
+      replies.push(
+        [
+          "📍 Elegí la *ciudad*:",
+          ...top.map((c, i) => `${i + 1}) ${c.name}`),
+        ].join("\n")
+      );
+      replies.push("Tip: respondé el número (1-10) o escribí el nombre.");
       break;
     }
+
     case "prop_ciudad": {
       // 1) Si aún no cargamos opciones, las pedimos a WP y mostramos menú
       if (!Array.isArray(s.data.cityOptions) || !s.data.cityOptions.length) {
