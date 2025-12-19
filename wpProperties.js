@@ -122,15 +122,21 @@ function detectCurrency(val) {
 function extractPrice(p) {
   const acf = p?.acf || null;
   const meta = p?.meta || null;
+  const pm = p?.property_meta || null;
 
   const rawPrice =
     (acf && (acf.price || acf.precio || acf.property_price)) ??
     (meta && (meta.price || meta.precio || meta.property_price)) ??
+    (pm &&
+      (pm.REAL_HOMES_property_price || pm.REAL_HOMES_property_old_price)) ??
     null;
 
   const rawPrefix =
     (acf && (acf.price_prefix || acf.moneda || acf.currency)) ??
     (meta && (meta.price_prefix || meta.moneda || meta.currency)) ??
+    (pm &&
+      (pm.REAL_HOMES_property_price_prefix ||
+        pm.REAL_HOMES_property_price_postfix)) ??
     p?.price_prefix ??
     null;
 
