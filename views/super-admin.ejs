@@ -6,7 +6,7 @@
   <title>Super Admin | BR-Group</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* --- ESTILOS GLASSMORPHISM & DARK MODE --- */
+    /* --- ESTILOS GENERALES --- */
     :root { 
       --bg-dark: #020617; 
       --card-bg: rgba(30, 41, 59, 0.5);
@@ -32,13 +32,12 @@
     
     .agent-item { 
       padding: 12px 15px; margin-bottom: 4px; border-radius: 8px; cursor: pointer; transition: 0.2s; 
-      display: flex; justify-content: space-between; align-items: center; group;
+      display: flex; justify-content: space-between; align-items: center; 
     }
     .agent-item:hover, .agent-item.active { background: rgba(34,211,238,0.1); color: #fff; }
     .agent-name { font-weight: 500; font-size: 0.95rem; }
     .agent-role { font-size: 0.75rem; color: var(--text-dim); display: block; }
     
-    /* Acciones en hover (Editar/Borrar) */
     .actions { display: flex; gap: 8px; opacity: 0; transition: 0.2s; }
     .agent-item:hover .actions { opacity: 1; }
     
@@ -94,32 +93,47 @@
     .modal-box { background: #0f172a; border: 1px solid var(--border); padding: 30px; border-radius: 16px; width: 400px; max-width: 90%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); animation: slideUp 0.3s ease; }
     @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
 
-    .modal-box h3 { margin-bottom: 20px; font-size: 1.3rem; }
+    /* 🔥 ESTILOS DEL HEADER DEL MODAL (Esto faltaba y arregla el layout) */
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 { margin: 0; font-size: 1.3rem; }
+    .close-btn {
+      background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; line-height: 1;
+    }
+    .close-btn:hover { color: #fff; }
+
+    /* Estilos para el Rating en el Header del Modal */
+    .chat-rating {
+      font-size: 0.85rem;
+      background: rgba(34, 211, 238, 0.1); /* Toque azulado */
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 5px;
+      border: 1px solid rgba(34, 211, 238, 0.2);
+    }
+    .stars { color: #fbbf24; font-size: 1rem; letter-spacing: 1px; }
+    .no-rating { color: var(--text-dim); font-size: 0.85rem; font-style: italic; }
+
+    /* FORMULARIO */
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 0.9rem; }
     
-    /* INPUTS Y SELECTS */
     .form-group input, .form-group select { 
-      width: 100%; 
-      padding: 12px; 
-      background: rgba(255,255,255,0.05); 
-      border: 1px solid var(--border); 
-      border-radius: 8px; 
-      color: #fff; 
-      outline: none; 
-      transition: 0.2s; 
+      width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+      border: 1px solid var(--border); border-radius: 8px; color: #fff; outline: none; transition: 0.2s; 
     }
-    
-    .form-group input:focus, .form-group select:focus { 
-      border-color: var(--accent); 
-      background: rgba(34,211,238,0.05); 
-    }
-
-    /* 🔥 SOLUCIÓN PARA SELECT EN WINDOWS */
-    .form-group select option {
-      background-color: #0f172a; /* Fondo sólido oscuro para las opciones */
-      color: #fff; /* Texto blanco */
-    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--accent); background: rgba(34,211,238,0.05); }
+    /* Fix para selects en Windows */
+    .form-group select option { background-color: #0f172a; color: #fff; }
     
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
     .btn-cancel { padding: 10px 16px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
@@ -128,24 +142,13 @@
 
     /* Modal Chat Grande */
     .modal-box.large { width: 600px; height: 80vh; display: flex; flex-direction: column; }
-    .chat-scroll { flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); margin: 15px 0; padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+    .chat-scroll { flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); margin-bottom: 15px; padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+    
     .msg { margin-bottom: 10px; padding: 10px 14px; border-radius: 12px; font-size: 0.95rem; max-width: 85%; line-height: 1.4; }
     .msg-user { background: #1e293b; align-self: flex-start; border-bottom-left-radius: 2px; }
     .msg-agent { background: #0891b2; align-self: flex-end; margin-left: auto; text-align: right; border-bottom-right-radius: 2px; }
     .msg-meta { font-size: 0.75rem; opacity: 0.5; margin-top: 4px; display: block; }
-/* Estilos para el Rating en el Header del Modal */
-    .chat-rating {
-      font-size: 0.9rem;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 5px 12px;
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      border: 1px solid var(--border);
-    }
-    .stars { color: #fbbf24; font-size: 1.1rem; letter-spacing: 2px; }
-    .no-rating { color: var(--text-dim); font-size: 0.85rem; font-style: italic; }
+
   </style>
 </head>
 <body>
@@ -218,7 +221,6 @@
           <canvas id="categoryChart"></canvas>
         </div>
       </div>
-      
       <div class="card wide tall">
         <div class="kpi-title">Actividad Reciente</div>
         <div style="flex:1; position: relative;">
@@ -246,25 +248,24 @@
 
   <div class="modal-overlay" id="userModal">
     <div class="modal-box">
-      <h3 id="modalTitle">Nuevo Agente</h3>
+      <div class="modal-header">
+        <h3 id="modalTitle">Nuevo Agente</h3>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
       <form id="userForm">
         <input type="hidden" name="id" id="userId">
-        
         <div class="form-group">
           <label>Nombre Completo</label>
           <input type="text" name="name" id="userName" required placeholder="Ej: Juan Perez">
         </div>
-        
         <div class="form-group">
           <label>Usuario (Login)</label>
           <input type="text" name="username" id="userUser" required placeholder="juanp">
         </div>
-        
         <div class="form-group">
           <label>Contraseña <small id="passHint" style="color:var(--accent); font-weight:normal">(Dejar en blanco para no cambiar)</small></label>
           <input type="password" name="password" id="userPass" placeholder="******">
         </div>
-        
         <div class="form-group">
           <label>Rol</label>
           <select name="role" id="userRole">
@@ -272,7 +273,6 @@
             <option value="superadmin">Super Admin</option>
           </select>
         </div>
-        
         <div class="modal-actions">
           <button type="button" class="btn-cancel" onclick="closeModals()">Cancelar</button>
           <button type="submit" class="btn-submit">Guardar Cambios</button>
@@ -281,10 +281,10 @@
     </div>
   </div>
 
- <div class="modal-overlay" id="chatModal">
+  <div class="modal-overlay" id="chatModal">
     <div class="modal-box large">
       <div class="modal-header">
-        <div style="display:flex; flex-direction:column; gap:4px">
+        <div>
           <h3 id="chatModalTitle" style="margin:0; font-size:1.1rem">Detalle del Chat</h3>
           <div id="chatRatingDisplay"></div>
         </div>
@@ -302,9 +302,8 @@
     // Variables globales
     let categoryChartInstance = null;
     let trendChartInstance = null;
-    let currentMode = 'create'; // 'create' o 'edit'
+    let currentMode = 'create';
 
-    // --- INICIO ---
     document.addEventListener('DOMContentLoaded', loadDashboardStats);
 
     // --- CARGAR DASHBOARD ---
@@ -313,18 +312,13 @@
         const res = await fetch('/api/stats');
         const data = await res.json();
         
-        // Llenar KPIs
         animateValue('kpi-today', 0, data.ticketsToday, 500);
         animateValue('kpi-month', 0, data.ticketsMonth, 500);
         animateValue('kpi-msgs', 0, data.totalMsgs, 500);
         document.getElementById('kpi-agents').innerText = data.agentsCount;
 
-        // Renderizar Gráficos con DATA REAL
         renderCategoryChart(data.categories || []);
-        
-        // 👇 Pasamos el objeto trend que viene del backend
         renderTrendChart(data.trend || { labels: [], data: [] }); 
-
       } catch (e) { console.error("Error cargando stats", e); }
     }
 
@@ -342,7 +336,6 @@
       }, stepTime);
     }
 
-    // --- GRÁFICOS (Chart.js) ---
     function renderCategoryChart(categories) {
       const ctx = document.getElementById('categoryChart').getContext('2d');
       if (categoryChartInstance) categoryChartInstance.destroy();
@@ -361,9 +354,7 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: {
-            legend: { position: 'right', labels: { color: '#94a3b8', font: {size: 11} } }
-          }
+          plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: {size: 11} } } }
         }
       });
     }
@@ -379,10 +370,10 @@
       trendChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: trendData.labels, // 👈 Etiquetas reales (Lun, Mar...)
+          labels: trendData.labels,
           datasets: [{
             label: 'Chats Atendidos',
-            data: trendData.data,   // 👈 Datos reales (0, 5, 12...)
+            data: trendData.data,
             borderColor: '#22d3ee',
             backgroundColor: gradient,
             fill: true,
@@ -396,20 +387,14 @@
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { 
-                grid: { display: false }, 
-                ticks: { color: '#94a3b8' } 
-            },
-            y: { 
-                grid: { color: 'rgba(255,255,255,0.05)' }, 
-                ticks: { color: '#94a3b8', stepSize: 1 } // Pasos enteros
-            }
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', stepSize: 1 } }
           }
         }
       });
     }
 
-    // --- NAVEGACIÓN Y CARGA DE HISTORIAL ---
+    // --- NAVEGACIÓN ---
     function setActive(el) {
       document.querySelectorAll('.agent-item').forEach(e => e.classList.remove('active'));
       el.classList.add('active');
@@ -420,7 +405,7 @@
       document.getElementById('view-dashboard').style.display = 'grid';
       document.getElementById('view-history').style.display = 'none';
       document.getElementById('page-title').innerText = 'Dashboard General';
-      loadDashboardStats(); // Recargar datos
+      loadDashboardStats();
     }
 
     async function loadHistory(id, name, el) {
@@ -459,7 +444,7 @@
       });
     }
 
-    // --- ABM AGENTES (MODAL UNIFICADO) ---
+    // --- MODALES ---
     function openModal(mode, id, name, username, role) {
       currentMode = mode;
       document.getElementById('userModal').style.display = 'flex';
@@ -474,14 +459,13 @@
         document.getElementById('userName').value = name;
         document.getElementById('userUser').value = username;
         document.getElementById('userRole').value = role;
-        
         passHint.style.display = 'inline'; 
-        passInput.required = false; // No obligatoria al editar
+        passInput.required = false;
       } else {
         title.innerText = 'Crear Nuevo Agente';
         document.getElementById('userForm').reset();
         passHint.style.display = 'none';
-        passInput.required = true; // Obligatoria al crear
+        passInput.required = true;
       }
     }
 
@@ -489,7 +473,6 @@
       document.querySelectorAll('.modal-overlay').forEach(e => e.style.display = 'none');
     }
 
-    // Manejo del Formulario (Crear/Editar)
     document.getElementById('userForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
@@ -511,7 +494,7 @@
         });
 
         if (res.ok) {
-          location.reload(); // Recargar para ver cambios
+          location.reload();
         } else {
           const err = await res.json();
           alert('Error: ' + (err.error || 'No se pudo guardar'));
@@ -523,20 +506,17 @@
     });
 
     async function deleteAgent(id, ev) {
-      ev.stopPropagation(); // Evitar que se abra el historial al hacer click en borrar
+      ev.stopPropagation();
       if(!confirm('🚨 ¿Estás seguro de ELIMINAR a este agente?\nEsta acción no se puede deshacer.')) return;
-      
       const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' });
       if(res.ok) location.reload();
       else alert('Error al eliminar');
     }
 
-    // --- VISUALIZADOR DE CHAT ---
-   async function viewChat(chatId, topic) {
+    async function viewChat(chatId, topic) {
       document.getElementById('chatModal').style.display = 'flex';
       document.getElementById('chatModalTitle').innerText = `Chat: ${topic} (${chatId})`;
       
-      // Limpiar UI mientras carga
       const ratingContainer = document.getElementById('chatRatingDisplay');
       ratingContainer.innerHTML = ''; 
       const container = document.getElementById('chat-content');
@@ -552,15 +532,13 @@
           return;
         }
 
-        // --- 🔍 LÓGICA PARA BUSCAR RATING ---
+        // Lógica de Rating
         let ratingHtml = '<span class="no-rating">Sin calificación</span>';
-        
-        // Buscamos un mensaje del sistema que empiece con "Rating:"
         const ratingMsg = msgs.find(m => m.who === 'system' && m.text && m.text.startsWith('Rating:'));
         
         if (ratingMsg) {
-          const text = ratingMsg.text; // Ej: "Rating: 5 estrellas"
-          const starsMatch = text.match(/(\d+)/); // Extraer el número
+          const text = ratingMsg.text; 
+          const starsMatch = text.match(/(\d+)/);
           
           if (starsMatch) {
             const numStars = parseInt(starsMatch[1]);
@@ -570,10 +548,9 @@
             ratingHtml = '<div class="chat-rating"><span class="no-rating">Calificación omitida</span></div>';
           }
         }
-        
         ratingContainer.innerHTML = ratingHtml;
-        // ------------------------------------
 
+        // Render mensajes
         msgs.forEach(m => {
           const div = document.createElement('div');
           div.className = `msg msg-${m.who === 'user' ? 'user' : 'agent'}`;
@@ -584,11 +561,7 @@
           }
 
           const time = new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-          
-          div.innerHTML = `
-            ${content}
-            <span class="msg-meta">${time}</span>
-          `;
+          div.innerHTML = `${content}<span class="msg-meta">${time}</span>`;
           container.appendChild(div);
         });
         
@@ -599,6 +572,6 @@
         container.innerHTML = '<div style="text-align:center; color:red">Error cargando chat</div>';
       }
     }
-     </script>
+  </script>
 </body>
 </html>
