@@ -175,6 +175,8 @@ function scheduleAIModeTimeout(chatId, untilTs) {
 const app = express();
 const server = http.createServer(app);
 
+app.use(express.json());
+
 app.use(express.urlencoded({ extended: true }));
 
 // 2. Configuración de Sesiones
