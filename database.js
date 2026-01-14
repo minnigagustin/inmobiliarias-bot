@@ -40,6 +40,11 @@ db.serialize(() => {
     topic TEXT, 
     status TEXT
   )`);
+
+  // 🔥 MIGRACIÓN AUTOMÁTICA: Agregar columna rating si no existe
+  db.run("ALTER TABLE tickets ADD COLUMN rating INTEGER", (err) => {
+    // Si da error es porque ya existe, lo ignoramos.
+  });
 });
 
 // Crear admin por defecto como superadmin
@@ -299,6 +304,19 @@ module.exports = {
           if (err) reject(err);
           else resolve(rows);
         }
+      );
+    });
+  },
+
+  // 🔥 NUEVO: Guardar calificación en el ticket
+  saveRating: (chatId, rating) => {
+    return new Promise((resolve, reject) => {
+      // Actualizamos el último ticket de este usuario
+      db.run(
+        `UPDATE tickets SET rating = ? 
+         WHERE chat_id = ? AND id = (SELECT MAX(id) FROM tickets WHERE chat_id = ?)`,
+        [rating, chatId, chatId],
+        (err) => (err ? reject(err) : resolve(true))
       );
     });
   },

@@ -1782,6 +1782,28 @@ async function handleText({ chatId, text, channel = "wa" }) {
       }
       break;
     }
+    case "rate_followup": {
+      const yn = parseYesNo(bodyRaw);
+
+      if (yn === "yes") {
+        // Si dice SÍ: Reseteamos y mostramos menú principal
+        reset(chatId);
+        replies.push("¡Dale! Aquí tenés el menú nuevamente:");
+        replies.push(mainMenuText());
+      } else if (yn === "no") {
+        // Si dice NO: Nos despedimos y cerramos sesión lógica
+        reset(chatId);
+        replies.push(
+          "¡Perfecto! Gracias por contactarte con nosotros. Que tengas un excelente día. 👋"
+        );
+      } else {
+        // Si no se entiende
+        replies.push(
+          "Disculpá, no te entendí. ¿Querés consultar algo más? (Respondé Sí o No)."
+        );
+      }
+      break;
+    }
 
     default:
       reset(chatId);

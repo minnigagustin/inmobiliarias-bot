@@ -737,12 +737,39 @@ io.on("connection", async (socket) => {
 
   socket.on("rate_submit", async ({ stars, skipped }) => {
     const txt = skipped ? "Rating omitido" : `Rating: ${stars} estrellas`;
+
+    // 1. Guardar en DB
+    if (!skipped && stars) {
+      await DB.saveRating(socket.id, stars);
+    }
+
+    // 2. Registrar en transcript
     pushTranscript(socket.id, { who: "system", text: txt, ts: Date.now() });
+
+    // 3. Agradecer
     io.to(socket.id).emit("system_message", {
       text: "¡Gracias por tu opinión!",
     });
-    const { replies } = await handleText({ chatId: socket.id, text: "menu" });
-    replies.forEach((t) => io.to(socket.id).emit("bot_message", { text: t }));
+
+    // 🔥 CAMBIO: En lugar de ir al menú directo, preguntamos
+    const s = getSession(socket.id);
+    s.step = "rate_followup"; // Nuevo estado temporal
+
+    const followUpMsg = "¿Deseás realizar alguna otra consulta? (Sí / No)";
+
+    io.to(socket.id).emit("bot_message", {
+      text: followUpMsg,
+      buttons: [
+        { label: "Sí", value: "sí" },
+        { label: "No", value: "no" },
+      ], // Opcional: botones rápidos
+    });
+
+    pushTranscript(socket.id, {
+      who: "bot",
+      text: followUpMsg,
+      ts: Date.now(),
+    });
   });
 
   socket.on("disconnect", () => {
