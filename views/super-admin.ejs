@@ -133,7 +133,19 @@
     .msg-user { background: #1e293b; align-self: flex-start; border-bottom-left-radius: 2px; }
     .msg-agent { background: #0891b2; align-self: flex-end; margin-left: auto; text-align: right; border-bottom-right-radius: 2px; }
     .msg-meta { font-size: 0.75rem; opacity: 0.5; margin-top: 4px; display: block; }
-
+/* Estilos para el Rating en el Header del Modal */
+    .chat-rating {
+      font-size: 0.9rem;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 5px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+    }
+    .stars { color: #fbbf24; font-size: 1.1rem; letter-spacing: 2px; }
+    .no-rating { color: var(--text-dim); font-size: 0.85rem; font-style: italic; }
   </style>
 </head>
 <body>
@@ -269,9 +281,16 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="chatModal">
+ <div class="modal-overlay" id="chatModal">
     <div class="modal-box large">
-      <h3 id="chatModalTitle">Detalle del Chat</h3>
+      <div class="modal-header">
+        <div style="display:flex; flex-direction:column; gap:4px">
+          <h3 id="chatModalTitle" style="margin:0; font-size:1.1rem">Detalle del Chat</h3>
+          <div id="chatRatingDisplay"></div>
+        </div>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      
       <div class="chat-scroll" id="chat-content"></div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeModals()">Cerrar</button>
@@ -513,42 +532,73 @@
     }
 
     // --- VISUALIZADOR DE CHAT ---
-    async function viewChat(chatId, topic) {
+   async function viewChat(chatId, topic) {
       document.getElementById('chatModal').style.display = 'flex';
       document.getElementById('chatModalTitle').innerText = `Chat: ${topic} (${chatId})`;
+      
+      // Limpiar UI mientras carga
+      const ratingContainer = document.getElementById('chatRatingDisplay');
+      ratingContainer.innerHTML = ''; 
       const container = document.getElementById('chat-content');
       container.innerHTML = '<div style="text-align:center; color:#888; padding:20px">Cargando historial...</div>';
       
-      const res = await fetch(`/api/chat-transcript/${chatId}`);
-      const msgs = await res.json();
-      container.innerHTML = '';
+      try {
+        const res = await fetch(`/api/chat-transcript/${chatId}`);
+        const msgs = await res.json();
+        container.innerHTML = '';
 
-      if (msgs.length === 0) {
-        container.innerHTML = '<div style="text-align:center; color:#888; padding:20px">No hay mensajes registrados en este ticket.</div>';
-        return;
-      }
-
-      msgs.forEach(m => {
-        const div = document.createElement('div');
-        div.className = `msg msg-${m.who === 'user' ? 'user' : 'agent'}`;
-        
-        let content = m.text || '';
-        if (m.type === 'image') {
-          content = `<a href="${m.url}" target="_blank"><img src="${m.url}" style="max-width:200px; border-radius:8px"></a>`;
+        if (msgs.length === 0) {
+          container.innerHTML = '<div style="text-align:center; color:#888; padding:20px">No hay mensajes registrados.</div>';
+          return;
         }
 
-        const time = new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        // --- 🔍 LÓGICA PARA BUSCAR RATING ---
+        let ratingHtml = '<span class="no-rating">Sin calificación</span>';
         
-        div.innerHTML = `
-          ${content}
-          <span class="msg-meta">${time}</span>
-        `;
-        container.appendChild(div);
-      });
-      
-      // Scroll al final
-      setTimeout(() => container.scrollTop = container.scrollHeight, 100);
+        // Buscamos un mensaje del sistema que empiece con "Rating:"
+        const ratingMsg = msgs.find(m => m.who === 'system' && m.text && m.text.startsWith('Rating:'));
+        
+        if (ratingMsg) {
+          const text = ratingMsg.text; // Ej: "Rating: 5 estrellas"
+          const starsMatch = text.match(/(\d+)/); // Extraer el número
+          
+          if (starsMatch) {
+            const numStars = parseInt(starsMatch[1]);
+            const starsStr = '★'.repeat(numStars) + '☆'.repeat(5 - numStars);
+            ratingHtml = `<div class="chat-rating"><span>Calificación:</span> <span class="stars">${starsStr}</span></div>`;
+          } else if (text.includes('omitido')) {
+            ratingHtml = '<div class="chat-rating"><span class="no-rating">Calificación omitida</span></div>';
+          }
+        }
+        
+        ratingContainer.innerHTML = ratingHtml;
+        // ------------------------------------
+
+        msgs.forEach(m => {
+          const div = document.createElement('div');
+          div.className = `msg msg-${m.who === 'user' ? 'user' : 'agent'}`;
+          
+          let content = m.text || '';
+          if (m.type === 'image') {
+            content = `<a href="${m.url}" target="_blank"><img src="${m.url}" style="max-width:200px; border-radius:8px"></a>`;
+          }
+
+          const time = new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+          
+          div.innerHTML = `
+            ${content}
+            <span class="msg-meta">${time}</span>
+          `;
+          container.appendChild(div);
+        });
+        
+        setTimeout(() => container.scrollTop = container.scrollHeight, 100);
+
+      } catch (e) {
+        console.error(e);
+        container.innerHTML = '<div style="text-align:center; color:red">Error cargando chat</div>';
+      }
     }
-  </script>
+     </script>
 </body>
 </html>
