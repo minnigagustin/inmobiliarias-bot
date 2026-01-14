@@ -251,3 +251,17 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   font-weight: 700;
 }
 .prop-link:hover { filter: brightness(1.06); }
+/* Estilo específico para las estrellas de calificación */
+.choice-btn[data-stars] {
+  color: #fbbf24; /* Color Ámbar / Dorado */
+  border-color: rgba(251, 191, 36, 0.4); /* Borde sutil dorado */
+  background: rgba(251, 191, 36, 0.1); /* Fondo sutil dorado */
+  font-size: 1.1rem; /* Un poco más grandes */
+  letter-spacing: 2px; /* Separarlas un poco */
+}
+
+.choice-btn[data-stars]:hover {
+  background: rgba(251, 191, 36, 0.25);
+  border-color: #fbbf24;
+  transform: translateY(-1px); /* Pequeño efecto de elevación */
+}
