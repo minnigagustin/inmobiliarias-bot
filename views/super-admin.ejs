@@ -97,8 +97,29 @@
     .modal-box h3 { margin-bottom: 20px; font-size: 1.3rem; }
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 0.9rem; }
-    .form-group input, .form-group select { width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: #fff; outline: none; transition: 0.2s; }
-    .form-group input:focus { border-color: var(--accent); background: rgba(34,211,238,0.05); }
+    
+    /* INPUTS Y SELECTS */
+    .form-group input, .form-group select { 
+      width: 100%; 
+      padding: 12px; 
+      background: rgba(255,255,255,0.05); 
+      border: 1px solid var(--border); 
+      border-radius: 8px; 
+      color: #fff; 
+      outline: none; 
+      transition: 0.2s; 
+    }
+    
+    .form-group input:focus, .form-group select:focus { 
+      border-color: var(--accent); 
+      background: rgba(34,211,238,0.05); 
+    }
+
+    /* 🔥 SOLUCIÓN PARA SELECT EN WINDOWS */
+    .form-group select option {
+      background-color: #0f172a; /* Fondo sólido oscuro para las opciones */
+      color: #fff; /* Texto blanco */
+    }
     
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
     .btn-cancel { padding: 10px 16px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
@@ -287,6 +308,7 @@
 
       } catch (e) { console.error("Error cargando stats", e); }
     }
+
     function animateValue(id, start, end, duration) {
       if (start === end) return;
       const range = end - start;
@@ -367,7 +389,7 @@
         }
       });
     }
-    
+
     // --- NAVEGACIÓN Y CARGA DE HISTORIAL ---
     function setActive(el) {
       document.querySelectorAll('.agent-item').forEach(e => e.classList.remove('active'));
