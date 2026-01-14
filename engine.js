@@ -1605,19 +1605,25 @@ async function handleText({ chatId, text, channel = "wa" }) {
         })),
       };
 
+      // 1. Mensaje introductorio
       replies.push(
         `Perfecto 🙌 Con tu presupuesto de *${fmtAmount(budget, cur)}* en *${
           s.data.prop.city || "la ciudad que indiques"
         }*, estas son las mejores oportunidades que encontré:`
       );
 
+      // 2. Si NO es web, mandamos las fichas como texto
       if (channel !== "web") {
         for (const p of filtered) replies.push(fmtPropCard(p));
       }
 
+      // 3. CAMBIO CLAVE: El mensaje de pregunta lo mandamos DESPUÉS
+      // Pero como el 'ui' se procesa en paralelo, en el server.js haremos un truco
+      // para asegurar el orden. Por ahora, agregamos la pregunta al final de replies.
       replies.push(
         "¿Querés que un asesor te contacte para coordinar visita? (sí/no)"
       );
+
       s.step = "prop_buscar_derivar";
 
       return { replies, notifyAgent, session: s, ui };
@@ -1715,7 +1721,6 @@ async function handleText({ chatId, text, channel = "wa" }) {
         break;
       }
 
-      // 👇 NUEVO: data UI para Webchat (cards)
       const ui = {
         cards: filtered.map((p) => ({
           id: p.id,
@@ -1727,23 +1732,27 @@ async function handleText({ chatId, text, channel = "wa" }) {
         })),
       };
 
+      // 1. Mensaje introductorio
       replies.push(
         `Perfecto 🙌 Con tu presupuesto de *${fmtAmount(budget, cur)}* en *${
           s.data.prop.city || "la ciudad que indiques"
         }*, estas son las mejores oportunidades que encontré:`
       );
 
-      // WhatsApp / fallback: seguimos mandando texto
+      // 2. Si NO es web, mandamos las fichas como texto
       if (channel !== "web") {
         for (const p of filtered) replies.push(fmtPropCard(p));
       }
 
+      // 3. CAMBIO CLAVE: El mensaje de pregunta lo mandamos DESPUÉS
+      // Pero como el 'ui' se procesa en paralelo, en el server.js haremos un truco
+      // para asegurar el orden. Por ahora, agregamos la pregunta al final de replies.
       replies.push(
         "¿Querés que un asesor te contacte para coordinar visita? (sí/no)"
       );
+
       s.step = "prop_buscar_derivar";
 
-      // ✅ IMPORTANT: retornar UI junto con replies
       return { replies, notifyAgent, session: s, ui };
     }
 

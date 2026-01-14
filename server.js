@@ -629,17 +629,29 @@ io.on("connection", async (socket) => {
     const text = msg && msg.text ? String(msg.text) : "";
     const ts = Date.now();
 
+    // Registrar mensaje del usuario
     pushTranscript(socket.id, { who: "user", text, ts, type: "text" });
     fanoutToAgentIfNeeded(socket.id, { who: "user", text, ts, type: "text" });
 
+    // Si ya lo atiende un humano, ignorar al bot
     if (humanChats.has(socket.id)) return;
 
+    // Procesar con el Engine
     const { replies, notifyAgent, session, aiSignal, ui } = await handleText({
       chatId: socket.id,
       text,
       channel: "web",
     });
 
+    // --- 🔥 LÓGICA DE ORDENAMIENTO VISUAL ---
+
+    // 1. Si hay tarjetas, separamos el último mensaje de texto (la pregunta)
+    let finalQuestion = null;
+    if (ui?.cards?.length && replies.length > 0) {
+      finalQuestion = replies.pop(); // Sacamos el último para enviarlo al final
+    }
+
+    // 2. Enviamos los mensajes de texto introductorios
     replies.forEach((t) => {
       socket.emit("bot_message", { text: t });
       pushTranscript(socket.id, {
@@ -656,6 +668,7 @@ io.on("connection", async (socket) => {
       });
     });
 
+    // 3. Enviamos las Tarjetas (si existen)
     if (ui?.cards?.length) {
       socket.emit("bot_message", { type: "property_cards", cards: ui.cards });
       pushTranscript(socket.id, {
@@ -666,22 +679,58 @@ io.on("connection", async (socket) => {
       });
     }
 
+    // 4. Enviamos la Pregunta Final y los Botones (con delay si hubo cards)
+    if (finalQuestion) {
+      setTimeout(() => {
+        // Enviar pregunta
+        socket.emit("bot_message", { text: finalQuestion });
+        pushTranscript(socket.id, {
+          who: "bot",
+          text: finalQuestion,
+          ts: Date.now(),
+          type: "text",
+        });
+        fanoutToAgentIfNeeded(socket.id, {
+          who: "bot",
+          text: finalQuestion,
+          ts: Date.now(),
+          type: "text",
+        });
+
+        // Enviar botones (si corresponde al paso actual)
+        const b = buildButtonsForStep(session);
+        if (b?.length) {
+          socket.emit("bot_message", { text: "Opciones:", buttons: b });
+          pushTranscript(socket.id, {
+            who: "bot",
+            text: "Opciones...",
+            ts: Date.now(),
+            type: "text",
+          });
+        }
+      }, 600); // ⏳ Pequeña espera para asegurar que las cards se rendericen primero
+    } else {
+      // Flujo normal (sin cards o sin pregunta final separada)
+      const b = buildButtonsForStep(session);
+      if (b?.length) {
+        socket.emit("bot_message", { text: "Opciones:", buttons: b });
+        pushTranscript(socket.id, {
+          who: "bot",
+          text: "Opciones...",
+          ts: Date.now(),
+          type: "text",
+        });
+      }
+    }
+    // ----------------------------------------
+
+    // Manejo de IA (Timeouts)
     if (aiSignal?.mode === "on" || aiSignal?.mode === "extend") {
       if (aiSignal.until) scheduleAIModeTimeout(socket.id, aiSignal.until);
     }
     if (aiSignal?.mode === "off") clearAIModeTimer(socket.id);
 
-    const b = buildButtonsForStep(session);
-    if (b?.length) {
-      socket.emit("bot_message", { text: "Opciones:", buttons: b });
-      pushTranscript(socket.id, {
-        who: "bot",
-        text: "Opciones...",
-        ts: Date.now(),
-        type: "text",
-      });
-    }
-
+    // Notificación a Agentes (Cola de espera)
     if (notifyAgent) {
       const rec = {
         chatId: socket.id,

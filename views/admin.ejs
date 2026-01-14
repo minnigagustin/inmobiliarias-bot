@@ -414,7 +414,11 @@
         if(msg.text) content += `<div>${msg.text}</div>`;
       }
       
-      const time = new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      // 🔥 FIX: Acepta 'ts' (vivo) o 'timestamp' (historial)
+      const dateVal = msg.ts || msg.timestamp;
+      const time = dateVal 
+        ? new Date(dateVal).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) 
+        : '';
 
       bubble.innerHTML = `${content} <span class="msg-meta">${time}</span>`;
       
