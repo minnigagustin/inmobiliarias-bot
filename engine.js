@@ -792,6 +792,8 @@ async function handleText({ chatId, text, channel = "wa" }) {
   // ===== MODO IA ACTIVO (consultas_ia) =====
   if (isAIMode(s)) {
     const expired = expireAIModeIfNeeded(s);
+
+    s.data.topic = `Consulta: ${bodyRaw.substring(0, 30)}...`;
     if (!expired) {
       const ai = await answerFAQ({
         text: bodyRaw,
@@ -832,14 +834,17 @@ async function handleText({ chatId, text, channel = "wa" }) {
     if (choice) {
       switch (choice) {
         case 1:
+          s.data.topic = "Menú Administración"; // 👈 NUEVO
           s.step = "alquileres_menu";
           replies.push(alquileresMenuText());
           break;
         case 2:
+          s.data.topic = "Búsqueda de Propiedades"; // 👈 NUEVO
           s.step = "prop_menu";
           replies.push(propiedadesOperacionMenuText());
           break;
         case 3:
+          s.data.topic = "Consultas Generales"; // 👈 NUEVO
           s.step = "consultas_menu";
           replies.push(
             'Contame tu consulta o escribí "operador" para hablar con alguien del equipo.'
@@ -867,16 +872,20 @@ async function handleText({ chatId, text, channel = "wa" }) {
           replies.push(indicesMenuText());
           break;
         case 3: // Info inquilinos
+          s.data.tema = "Info Inquilinos"; // 🔥 GUARDAMOS EL TEMA
           replies.push(inquilinosInfoText());
           replies.push(alquileresMenuText());
           break;
         case 4: // Info propietarios
+          s.data.tema = "Info Propietarios"; // 🔥 GUARDAMOS EL TEMA
           replies.push(propietariosInfoText());
           replies.push(alquileresMenuText());
           break;
         case 5: // Humano
           replies.push("👤 Te derivo con un integrante del equipo. (Demo).");
-          notifyAgent = { motivo: "Pedido de operador (número)" };
+          notifyAgent = {
+            motivo: s.data.tema || "Administración de Alquileres",
+          };
           break;
       }
       return { replies, notifyAgent, session: s };
@@ -1743,7 +1752,7 @@ async function handleText({ chatId, text, channel = "wa" }) {
       if (yn === "yes") {
         notifyAgent = {
           propform: s.data.prop,
-          motivo: "Consulta de propiedades",
+          motivo: s.data.topic || "Interesado en Propiedad",
         };
         replies.push("👤 Te derivo con un integrante del equipo (simulado).");
         reset(chatId);

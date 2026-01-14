@@ -468,60 +468,76 @@ adminIo.use((socket, next) => {
 adminIo.on("connection", (socket) => {
   socket.emit("queue_snapshot", Array.from(pendingChats.values()));
 
+  // Dentro de adminIo.on('connection', ...)
+
   socket.on("assign", async ({ chatId }) => {
+    // 1. Obtener datos del agente desde la sesión
     const agentName = socket.agentUser.userName;
     const agentId = socket.agentUser.userId;
 
+    // 2. Recuperar datos de la cola antes de borrarlos
     const rec = pendingChats.get(chatId);
-    const payload = rec?.payload || {}; // Aseguramos que sea objeto
+    const payload = rec?.payload || {};
+
+    // 3. Quitar de la cola
     removeFromQueue(chatId, adminIo);
 
-    // 👇 LÓGICA DE CLASIFICACIÓN (Para el Dashboard)
-    let topic = "Consulta General"; // Valor por defecto
+    // 4. 👇 LÓGICA DE CLASIFICACIÓN DE TEMA (TOPIC) 👇
+    let topic = "Consulta General";
 
     if (payload.categoria) {
       // Caso Mantenimiento (ej: "Plomería")
       topic = `🛠 ${payload.categoria}`;
     } else if (payload.propform) {
-      // Caso Inmobiliaria (ej: "Alquilar Depto")
-      const op = payload.propform.op || "";
+      // Caso Inmobiliaria (ej: "Alquiler Depto")
+      const op =
+        payload.propform.op === "alquilar"
+          ? "Alquiler"
+          : payload.propform.op === "comprar"
+          ? "Venta"
+          : payload.propform.op || "Propiedad";
       const tipo = payload.propform.tipo || "";
       topic = `🏠 ${op} ${tipo}`.trim();
     } else if (payload.indice) {
       // Caso Calculadora (ej: "ICL")
       topic = `📈 ${payload.indice}`;
     } else if (payload.motivo) {
-      // Caso Genérico
-      topic = payload.motivo;
+      // Caso Genérico (limpiamos el texto sucio del menú)
+      topic = payload.motivo.replace("(número)", "").trim();
     }
 
-    // Actualizar estado en memoria
+    // 5. Actualizar estado en memoria (Chat activo)
     humanChats.set(chatId, { agentId: socket.id, agentName: agentName });
+
+    // 6. Apagar el timer de la IA para que no moleste
     clearAIModeTimer(chatId);
 
-    // Recuperar historial
+    // 7. Recuperar historial de mensajes
     let transcript = [];
     try {
+      // Intentamos leer de la DB
       transcript = await DB.getHistory(chatId);
     } catch (e) {
       console.error("Error historial DB", e);
     }
-    // Fallback a memoria si DB falla o está vacía
-    if (transcript.length === 0 && conversations.has(chatId))
+    // Fallback: Si la DB falla o está vacía, intentamos leer de la memoria RAM
+    if (transcript.length === 0 && conversations.has(chatId)) {
       transcript = conversations.get(chatId);
+    }
 
-    // Enviar al panel del agente
+    // 8. Enviar evento al panel del agente (para que se abra el chat)
     socket.emit("assigned", { chatId, transcript, payload });
 
-    // 🔥 CREAR TICKET EN DB CON EL TOPIC DETECTADO
+    // 9. 🔥 CREAR TICKET EN BASE DE DATOS CON EL TEMA DETECTADO
     DB.createTicket(agentId, chatId, topic);
 
-    // Avisar al Bridge (WhatsApp)
+    // 10. Avisar al Bridge (WhatsApp)
     const sid = bridgeChats.get(chatId);
-    if (sid)
+    if (sid) {
       bridgeIo.to(sid).emit("agent_assigned", { chatId, agent: agentName });
+    }
 
-    // Avisar al Cliente Web
+    // 11. Avisar al Cliente Web (si está conectado por web)
     if (io.sockets.sockets.has(chatId)) {
       io.to(chatId).emit("system_message", {
         text: `👤 ${agentName} tomó tu caso.`,
@@ -529,7 +545,7 @@ adminIo.on("connection", (socket) => {
       io.to(chatId).emit("agent_assigned", { agent: agentName });
     }
 
-    // Registrar evento en el chat
+    // 12. Registrar evento en el historial del chat
     const ts = Date.now();
     pushTranscript(chatId, {
       who: "system",
