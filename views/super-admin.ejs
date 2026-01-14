@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin | BR-Group</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* --- ESTILOS GLASSMORPHISM & DARK MODE --- */
+    :root { 
+      --bg-dark: #020617; 
+      --card-bg: rgba(30, 41, 59, 0.5);
+      --accent: #22d3ee; 
+      --accent-hover: #06b6d4;
+      --text: #f8fafc; 
+      --text-dim: #94a3b8;
+      --border: rgba(255,255,255,0.1); 
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    
+    body { background: var(--bg-dark); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+    
+    /* SIDEBAR */
+    .sidebar { width: 280px; background: rgba(15,23,42,0.95); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .logo { padding: 25px; font-weight: 800; font-size: 1.2rem; color: var(--accent); border-bottom: 1px solid var(--border); letter-spacing: -0.5px; }
+    
+    .nav-label { padding: 20px 20px 10px; font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); font-weight: 700; letter-spacing: 1px; }
+    
+    .agent-list { flex: 1; overflow-y: auto; padding: 0 10px; }
+    
+    .agent-item { 
+      padding: 12px 15px; margin-bottom: 4px; border-radius: 8px; cursor: pointer; transition: 0.2s; 
+      display: flex; justify-content: space-between; align-items: center; group;
+    }
+    .agent-item:hover, .agent-item.active { background: rgba(34,211,238,0.1); color: #fff; }
+    .agent-name { font-weight: 500; font-size: 0.95rem; }
+    .agent-role { font-size: 0.75rem; color: var(--text-dim); display: block; }
+    
+    /* Acciones en hover (Editar/Borrar) */
+    .actions { display: flex; gap: 8px; opacity: 0; transition: 0.2s; }
+    .agent-item:hover .actions { opacity: 1; }
+    
+    .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1rem; padding: 2px; }
+    .icon-btn:hover { color: var(--accent); transform: scale(1.1); }
+    .icon-btn.del:hover { color: var(--danger); }
+
+    .add-btn { 
+      margin: 15px; padding: 12px; background: var(--accent); color: #0f172a; 
+      border: none; border-radius: 8px; font-weight: 700; cursor: pointer; text-align: center; display: block; width: calc(100% - 30px);
+    }
+    .add-btn:hover { background: var(--accent-hover); }
+
+    /* MAIN CONTENT */
+    .main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: radial-gradient(circle at top right, #1e1b4b 0%, #020617 60%); }
+    
+    .topbar { 
+      padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; 
+      border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); 
+      background: rgba(2,6,23,0.6); position: sticky; top: 0; z-index: 10; 
+    }
+    .page-title { font-size: 1.5rem; font-weight: 700; }
+    .logout-link { color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; }
+    .logout-link:hover { color: #fff; border-color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+
+    /* DASHBOARD LAYOUT */
+    .dashboard-view { padding: 30px; display: grid; gap: 20px; grid-template-columns: repeat(4, 1fr); }
+    
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; backdrop-filter: blur(5px); display: flex; flex-direction: column; }
+    .card.wide { grid-column: span 2; }
+    .card.tall { grid-row: span 2; }
+    
+    .kpi-title { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 2.5rem; font-weight: 800; color: #fff; }
+    .kpi-desc { font-size: 0.8rem; color: var(--accent); margin-top: auto; }
+
+    /* TABLA HISTORIAL */
+    .history-view { display: none; padding: 30px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th { text-align: left; padding: 15px; color: var(--text-dim); border-bottom: 1px solid var(--border); font-size: 0.85rem; text-transform: uppercase; }
+    td { padding: 15px; border-bottom: 1px solid var(--border); font-size: 0.95rem; color: var(--text); }
+    
+    .badge { padding: 4px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 700; background: rgba(255,255,255,0.1); border: 1px solid var(--border); }
+    .badge.topic { color: var(--accent); border-color: rgba(34, 211, 238, 0.3); }
+    .badge.open { color: var(--success); background: rgba(16, 185, 129, 0.1); }
+    .badge.closed { color: var(--text-dim); }
+
+    .btn-view { background: none; border: 1px solid var(--border); color: #fff; padding: 4px 10px; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 0.8rem; }
+    .btn-view:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    /* MODALES */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    .modal-box { background: #0f172a; border: 1px solid var(--border); padding: 30px; border-radius: 16px; width: 400px; max-width: 90%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+    .modal-box h3 { margin-bottom: 20px; font-size: 1.3rem; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 0.9rem; }
+    .form-group input, .form-group select { width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: #fff; outline: none; transition: 0.2s; }
+    .form-group input:focus { border-color: var(--accent); background: rgba(34,211,238,0.05); }
+    
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
+    .btn-cancel { padding: 10px 16px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+    .btn-submit { padding: 10px 20px; background: var(--accent); color: #0f172a; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    .btn-submit:hover { filter: brightness(1.1); }
+
+    /* Modal Chat Grande */
+    .modal-box.large { width: 600px; height: 80vh; display: flex; flex-direction: column; }
+    .chat-scroll { flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); margin: 15px 0; padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+    .msg { margin-bottom: 10px; padding: 10px 14px; border-radius: 12px; font-size: 0.95rem; max-width: 85%; line-height: 1.4; }
+    .msg-user { background: #1e293b; align-self: flex-start; border-bottom-left-radius: 2px; }
+    .msg-agent { background: #0891b2; align-self: flex-end; margin-left: auto; text-align: right; border-bottom-right-radius: 2px; }
+    .msg-meta { font-size: 0.75rem; opacity: 0.5; margin-top: 4px; display: block; }
+
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="logo">🛡️ Super Admin</div>
+    
+    <button class="add-btn" onclick="openModal('create')">+ Nuevo Agente</button>
+
+    <div class="nav-label">Menú Principal</div>
+    <div class="agent-list" id="agent-list-container">
+      <div class="agent-item active" onclick="showDashboard(this)">
+        <div class="agent-name">📊 Dashboard General</div>
+      </div>
+      
+      <div class="nav-label" style="margin-top:10px">Agentes</div>
+      <% agents.forEach(a => { %>
+        <div class="agent-item" onclick="loadHistory('<%= a.id %>', '<%= a.name %>', this)">
+          <div>
+            <div class="agent-name"><%= a.name %></div>
+            <small class="agent-role"><%= a.role === 'superadmin' ? '🛡️ Admin' : '👤 Agente' %></small>
+          </div>
+          <div class="actions">
+            <button class="icon-btn" title="Editar" onclick="openModal('edit', '<%= a.id %>', '<%= a.name %>', '<%= a.username %>', '<%= a.role %>'); event.stopPropagation()">✎</button>
+            
+            <% if(a.role !== 'superadmin') { %>
+              <button class="icon-btn del" title="Borrar" onclick="deleteAgent('<%= a.id %>', event)">🗑</button>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+    
+    <div style="padding: 20px;">
+      <a href="/admin" style="color:var(--accent); text-decoration:none; font-size:0.9rem; font-weight:600;">Ir al Chat Operativo &rarr;</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-title" id="page-title">Dashboard General</div>
+      <a href="/logout" class="logout-link">Cerrar Sesión</a>
+    </div>
+
+    <div id="view-dashboard" class="dashboard-view">
+      <div class="card">
+        <div class="kpi-title">Clientes Hoy</div>
+        <div class="kpi-value" id="kpi-today">...</div>
+        <div class="kpi-desc">Tickets cerrados hoy</div>
+      </div>
+      <div class="card">
+        <div class="kpi-title">Clientes Mes</div>
+        <div class="kpi-value" id="kpi-month">...</div>
+        <div class="kpi-desc">Tickets acumulados</div>
+      </div>
+      <div class="card">
+        <div class="kpi-title">Mensajes Totales</div>
+        <div class="kpi-value" id="kpi-msgs">...</div>
+        <div class="kpi-desc">Interacciones Bot/User</div>
+      </div>
+      <div class="card">
+        <div class="kpi-title">Agentes Activos</div>
+        <div class="kpi-value" id="kpi-agents">...</div>
+        <div class="kpi-desc">Usuarios registrados</div>
+      </div>
+
+      <div class="card wide tall">
+        <div class="kpi-title">Motivos de Contacto (Top 5)</div>
+        <div style="flex:1; position: relative;">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+      
+      <div class="card wide tall">
+        <div class="kpi-title">Actividad Reciente</div>
+        <div style="flex:1; position: relative;">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-history" class="history-view">
+      <table id="tickets-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>ID Chat (Cliente)</th>
+            <th>Tema / Motivo</th>
+            <th>Duración</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tickets-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="userModal">
+    <div class="modal-box">
+      <h3 id="modalTitle">Nuevo Agente</h3>
+      <form id="userForm">
+        <input type="hidden" name="id" id="userId">
+        
+        <div class="form-group">
+          <label>Nombre Completo</label>
+          <input type="text" name="name" id="userName" required placeholder="Ej: Juan Perez">
+        </div>
+        
+        <div class="form-group">
+          <label>Usuario (Login)</label>
+          <input type="text" name="username" id="userUser" required placeholder="juanp">
+        </div>
+        
+        <div class="form-group">
+          <label>Contraseña <small id="passHint" style="color:var(--accent); font-weight:normal">(Dejar en blanco para no cambiar)</small></label>
+          <input type="password" name="password" id="userPass" placeholder="******">
+        </div>
+        
+        <div class="form-group">
+          <label>Rol</label>
+          <select name="role" id="userRole">
+            <option value="agent">Agente</option>
+            <option value="superadmin">Super Admin</option>
+          </select>
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" onclick="closeModals()">Cancelar</button>
+          <button type="submit" class="btn-submit">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="chatModal">
+    <div class="modal-box large">
+      <h3 id="chatModalTitle">Detalle del Chat</h3>
+      <div class="chat-scroll" id="chat-content"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeModals()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Variables globales
+    let categoryChartInstance = null;
+    let trendChartInstance = null;
+    let currentMode = 'create'; // 'create' o 'edit'
+
+    // --- INICIO ---
+    document.addEventListener('DOMContentLoaded', loadDashboardStats);
+
+    // --- CARGAR DASHBOARD ---
+    async function loadDashboardStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        
+        // Llenar KPIs
+        animateValue('kpi-today', 0, data.ticketsToday, 500);
+        animateValue('kpi-month', 0, data.ticketsMonth, 500);
+        animateValue('kpi-msgs', 0, data.totalMsgs, 500);
+        document.getElementById('kpi-agents').innerText = data.agentsCount;
+
+        // Renderizar Gráficos con DATA REAL
+        renderCategoryChart(data.categories || []);
+        
+        // 👇 Pasamos el objeto trend que viene del backend
+        renderTrendChart(data.trend || { labels: [], data: [] }); 
+
+      } catch (e) { console.error("Error cargando stats", e); }
+    }
+    function animateValue(id, start, end, duration) {
+      if (start === end) return;
+      const range = end - start;
+      const obj = document.getElementById(id);
+      let current = start;
+      const increment = end > start ? 1 : -1;
+      const stepTime = Math.abs(Math.floor(duration / range));
+      const timer = setInterval(() => {
+        current += increment;
+        obj.innerHTML = current;
+        if (current == end) clearInterval(timer);
+      }, stepTime);
+    }
+
+    // --- GRÁFICOS (Chart.js) ---
+    function renderCategoryChart(categories) {
+      const ctx = document.getElementById('categoryChart').getContext('2d');
+      if (categoryChartInstance) categoryChartInstance.destroy();
+
+      categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: categories.map(c => c.topic),
+          datasets: [{
+            data: categories.map(c => c.count),
+            backgroundColor: ['#22d3ee', '#818cf8', '#34d399', '#f472b6', '#fbbf24', '#94a3b8'],
+            borderWidth: 0,
+            hoverOffset: 10
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: '#94a3b8', font: {size: 11} } }
+          }
+        }
+      });
+    }
+
+    function renderTrendChart(trendData) {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (trendChartInstance) trendChartInstance.destroy();
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient.addColorStop(0, 'rgba(34, 211, 238, 0.4)');
+      gradient.addColorStop(1, 'rgba(34, 211, 238, 0)');
+
+      trendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: trendData.labels, // 👈 Etiquetas reales (Lun, Mar...)
+          datasets: [{
+            label: 'Chats Atendidos',
+            data: trendData.data,   // 👈 Datos reales (0, 5, 12...)
+            borderColor: '#22d3ee',
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#fff',
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { 
+                grid: { display: false }, 
+                ticks: { color: '#94a3b8' } 
+            },
+            y: { 
+                grid: { color: 'rgba(255,255,255,0.05)' }, 
+                ticks: { color: '#94a3b8', stepSize: 1 } // Pasos enteros
+            }
+          }
+        }
+      });
+    }
+    
+    // --- NAVEGACIÓN Y CARGA DE HISTORIAL ---
+    function setActive(el) {
+      document.querySelectorAll('.agent-item').forEach(e => e.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function showDashboard(el) {
+      if(el) setActive(el);
+      document.getElementById('view-dashboard').style.display = 'grid';
+      document.getElementById('view-history').style.display = 'none';
+      document.getElementById('page-title').innerText = 'Dashboard General';
+      loadDashboardStats(); // Recargar datos
+    }
+
+    async function loadHistory(id, name, el) {
+      setActive(el);
+      document.getElementById('view-dashboard').style.display = 'none';
+      document.getElementById('view-history').style.display = 'block';
+      document.getElementById('page-title').innerText = `Historial de: ${name}`;
+
+      const res = await fetch(`/api/agent-history/${id}`);
+      const tickets = await res.json();
+      const tbody = document.getElementById('tickets-body');
+      tbody.innerHTML = '';
+
+      if (tickets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Este agente aún no ha atendido chats.</td></tr>';
+        return;
+      }
+
+      tickets.forEach(t => {
+        const start = new Date(t.start_ts);
+        const end = t.end_ts ? new Date(t.end_ts) : null;
+        const duration = end ? Math.round((end - start)/60000) + ' min' : 'En curso';
+        const badgeStatus = t.status === 'closed' ? 'closed' : 'open';
+        const statusText = t.status === 'closed' ? 'Cerrado' : '🟢 Activo';
+
+        tbody.innerHTML += `
+          <tr>
+            <td>${start.toLocaleDateString()} ${start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+            <td style="font-weight:bold; color:var(--accent)">${t.chat_id}</td>
+            <td><span class="badge topic">${t.topic || 'General'}</span></td>
+            <td>${duration}</td>
+            <td><span class="badge ${badgeStatus}">${statusText}</span></td>
+            <td><button class="btn-view" onclick="viewChat('${t.chat_id}', '${t.topic || 'Chat'}')">Ver Chat</button></td>
+          </tr>
+        `;
+      });
+    }
+
+    // --- ABM AGENTES (MODAL UNIFICADO) ---
+    function openModal(mode, id, name, username, role) {
+      currentMode = mode;
+      document.getElementById('userModal').style.display = 'flex';
+      
+      const title = document.getElementById('modalTitle');
+      const passHint = document.getElementById('passHint');
+      const passInput = document.getElementById('userPass');
+
+      if (mode === 'edit') {
+        title.innerText = `Editar a ${name}`;
+        document.getElementById('userId').value = id;
+        document.getElementById('userName').value = name;
+        document.getElementById('userUser').value = username;
+        document.getElementById('userRole').value = role;
+        
+        passHint.style.display = 'inline'; 
+        passInput.required = false; // No obligatoria al editar
+      } else {
+        title.innerText = 'Crear Nuevo Agente';
+        document.getElementById('userForm').reset();
+        passHint.style.display = 'none';
+        passInput.required = true; // Obligatoria al crear
+      }
+    }
+
+    function closeModals() {
+      document.querySelectorAll('.modal-overlay').forEach(e => e.style.display = 'none');
+    }
+
+    // Manejo del Formulario (Crear/Editar)
+    document.getElementById('userForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      
+      let url = '/api/agents';
+      let method = 'POST';
+
+      if (currentMode === 'edit') {
+        url = `/api/agents/${data.id}`;
+        method = 'PUT';
+      }
+
+      try {
+        const res = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+          location.reload(); // Recargar para ver cambios
+        } else {
+          const err = await res.json();
+          alert('Error: ' + (err.error || 'No se pudo guardar'));
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error de conexión');
+      }
+    });
+
+    async function deleteAgent(id, ev) {
+      ev.stopPropagation(); // Evitar que se abra el historial al hacer click en borrar
+      if(!confirm('🚨 ¿Estás seguro de ELIMINAR a este agente?\nEsta acción no se puede deshacer.')) return;
+      
+      const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' });
+      if(res.ok) location.reload();
+      else alert('Error al eliminar');
+    }
+
+    // --- VISUALIZADOR DE CHAT ---
+    async function viewChat(chatId, topic) {
+      document.getElementById('chatModal').style.display = 'flex';
+      document.getElementById('chatModalTitle').innerText = `Chat: ${topic} (${chatId})`;
+      const container = document.getElementById('chat-content');
+      container.innerHTML = '<div style="text-align:center; color:#888; padding:20px">Cargando historial...</div>';
+      
+      const res = await fetch(`/api/chat-transcript/${chatId}`);
+      const msgs = await res.json();
+      container.innerHTML = '';
+
+      if (msgs.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:#888; padding:20px">No hay mensajes registrados en este ticket.</div>';
+        return;
+      }
+
+      msgs.forEach(m => {
+        const div = document.createElement('div');
+        div.className = `msg msg-${m.who === 'user' ? 'user' : 'agent'}`;
+        
+        let content = m.text || '';
+        if (m.type === 'image') {
+          content = `<a href="${m.url}" target="_blank"><img src="${m.url}" style="max-width:200px; border-radius:8px"></a>`;
+        }
+
+        const time = new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        
+        div.innerHTML = `
+          ${content}
+          <span class="msg-meta">${time}</span>
+        `;
+        container.appendChild(div);
+      });
+      
+      // Scroll al final
+      setTimeout(() => container.scrollTop = container.scrollHeight, 100);
+    }
+  </script>
+</body>
+</html>

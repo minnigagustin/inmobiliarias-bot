@@ -13,11 +13,14 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "concurrently": "^8.2.2",
+    "connect-sqlite3": "^0.9.16",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "es-compromise": "^0.2.11",
     "express": "^4.19.2",
+    "express-session": "^1.18.2",
     "he": "^1.2.0",
     "lodash.deburr": "^4.1.0",
     "openai": "^4.58.1",
@@ -25,6 +28,7 @@
     "qrcode-terminal": "^0.12.0",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.8.1",
+    "sqlite3": "^5.1.7",
     "whatsapp-web.js": "^1.32.0"
   }
 }
