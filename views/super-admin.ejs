@@ -854,6 +854,51 @@
       display: block;
     }
 
+    /* Mobile Menu Button */
+    .mobile-menu-btn {
+      display: none;
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 1000;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .mobile-menu-btn:hover {
+      border-color: var(--accent-gold);
+      color: var(--accent-gold);
+    }
+
+    .mobile-menu-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Overlay */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 998;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .sidebar-overlay.active {
+      opacity: 1;
+    }
+
     /* Responsive */
     @media (max-width: 1200px) {
       .dashboard-view { grid-template-columns: repeat(2, 1fr); }
@@ -861,22 +906,153 @@
     }
 
     @media (max-width: 900px) {
-      .sidebar { width: 240px; }
-      .dashboard-view { grid-template-columns: 1fr; }
+      .mobile-menu-btn {
+        display: flex;
+      }
+
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        z-index: 999;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        width: 280px;
+        max-width: 85vw;
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay.active {
+        display: block;
+      }
+
+      .dashboard-view {
+        grid-template-columns: 1fr;
+        padding: 20px;
+        gap: 16px;
+      }
       .card.wide { grid-column: span 1; }
+      .card.tall { grid-row: span 1; }
+
+      .topbar {
+        padding: 16px 20px 16px 70px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .page-title {
+        font-size: 1.2rem;
+      }
+
+      .agent-stats-bar {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .kpi-value {
+        font-size: 2rem;
+      }
+
+      .history-view {
+        padding: 20px;
+      }
+
+      /* Table responsive */
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      th, td {
+        padding: 12px 14px;
+        font-size: 0.8rem;
+      }
     }
 
-    @media (max-width: 768px) {
-      body { flex-direction: column; }
-      .sidebar { width: 100%; height: auto; max-height: 200px; }
-      .agent-list { max-height: 100px; }
-      .main { height: calc(100vh - 200px); }
+    @media (max-width: 600px) {
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .logout-link {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .dashboard-view {
+        padding: 16px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .kpi-value {
+        font-size: 1.75rem;
+      }
+
+      #wa-status-container {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+      }
+
+      #wa-qr-container {
+        margin-top: 16px;
+      }
+
+      /* Modal responsive */
+      .modal-box {
+        width: 95%;
+        padding: 24px 20px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .modal-box.large {
+        width: 95%;
+        height: 90vh;
+      }
+
+      .modal-header h3 {
+        font-size: 1.1rem;
+      }
+
+      .form-group input,
+      .form-group select {
+        padding: 12px 14px;
+        font-size: 0.9rem;
+      }
+
+      .modal-actions {
+        flex-direction: column;
+      }
+
+      .modal-actions button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- Mobile Menu Button -->
+  <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
 
-  <div class="sidebar">
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="sidebar" id="sidebar">
     <div class="logo">
       <div class="logo-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1107,6 +1283,26 @@
       div.textContent = text;
       return div.innerHTML;
     }
+
+    // Mobile menu
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebarEl = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function openSidebar() {
+      sidebarEl.classList.add('open');
+      sidebarOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeSidebar() {
+      sidebarEl.classList.remove('open');
+      sidebarOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    mobileMenuBtn.addEventListener('click', openSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
 
     document.addEventListener('DOMContentLoaded', () => {
       console.log('Super-admin cargado');
@@ -1395,6 +1591,7 @@
 
     function showDashboard(el) {
       if(el) setActive(el);
+      closeSidebar(); // Close sidebar on mobile
       document.getElementById('view-dashboard').style.display = 'grid';
       document.getElementById('view-history').style.display = 'none';
       document.getElementById('agent-stats-bar').style.display = 'none';
@@ -1407,6 +1604,7 @@
       console.log('loadHistory llamado:', { id, name });
       try {
         setActive(el);
+        closeSidebar(); // Close sidebar on mobile
         document.getElementById('view-dashboard').style.display = 'none';
         document.getElementById('view-history').style.display = 'block';
         document.getElementById('page-title').innerText = `Historial: ${name}`;

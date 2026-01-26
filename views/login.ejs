@@ -241,6 +241,27 @@
       .form-panel { padding: 2rem; }
       .form-brand { text-align: center; }
     }
+
+    @media (max-width: 480px) {
+      html, body { overflow: auto; }
+      .form-panel {
+        padding: 1.5rem;
+        min-height: 100vh;
+        align-items: flex-start;
+        padding-top: 3rem;
+      }
+      .form-container { max-width: 100%; }
+      .form-brand { margin-bottom: 2rem; }
+      .form-brand h1 { font-size: 1.75rem; }
+      .form-brand p { font-size: 0.9rem; }
+      .input-wrapper input {
+        padding: 0.9rem 0.9rem 0.9rem 2.75rem;
+        font-size: 1rem;
+      }
+      .input-icon { left: 0.9rem; }
+      .btn-submit { padding: 0.9rem 1.25rem; }
+      .form-footer { margin-top: 2rem; }
+    }
   </style>
 </head>
 <body>
