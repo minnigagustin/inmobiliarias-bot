@@ -24,13 +24,15 @@ require("dotenv").config();
 // 🛡️ Verificar SESSION_SECRET obligatorio
 if (!process.env.SESSION_SECRET) {
   console.error("❌ FATAL: SESSION_SECRET no está definido en .env");
-  console.error("   Genera uno con: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"");
+  console.error(
+    "   Genera uno con: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+  );
   process.exit(1);
 }
 
 // 🛡️ Configuración de CORS origins permitidos
 const CORS_ORIGINS = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(",").map(s => s.trim())
+  ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
   : ["http://localhost:3000", "https://backpackpuntaalta.ar"];
 
 // 👇 Importa helpers IA adicionales desde engine.js
@@ -194,22 +196,24 @@ const app = express();
 const server = http.createServer(app);
 
 /// 🛡️ SEGURIDAD: Helmet para headers de seguridad
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "wss:", "ws:"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "wss:", "ws:"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: false,
-}));
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 
 // 🛡️ SEGURIDAD: Compresión
 app.use(compression());
@@ -223,8 +227,8 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting for static files and WebSocket
-    return req.path.startsWith('/socket.io') || req.path.startsWith('/uploads');
-  }
+    return req.path.startsWith("/socket.io") || req.path.startsWith("/uploads");
+  },
 });
 app.use(globalLimiter);
 
@@ -232,17 +236,19 @@ app.use(globalLimiter);
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 5,
-  message: { error: "Demasiados intentos de login, intenta de nuevo en 15 minutos." },
+  message: {
+    error: "Demasiados intentos de login, intenta de nuevo en 15 minutos.",
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // 2. Configuración de Sesiones (Segura)
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === "production";
 const sessionMiddleware = session({
   store: new SQLiteStore({ db: "sessions.db", dir: "." }),
   secret: process.env.SESSION_SECRET,
@@ -251,10 +257,10 @@ const sessionMiddleware = session({
   cookie: {
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: "strict",
     secure: isProduction, // Solo HTTPS en producción
   },
-  name: 'br.sid', // Nombre personalizado (no usar default 'connect.sid')
+  name: "br.sid", // Nombre personalizado (no usar default 'connect.sid')
 });
 
 app.use(sessionMiddleware);
@@ -293,14 +299,14 @@ app.use("/uploads", express.static(uploadsDir, { maxAge: "7d" }));
 
 /* ====================== RUTAS PRINCIPALES ====================== */
 app.get("/", (req, res) =>
-  res.render("index", { COMPANY_NAME: process.env.COMPANY_NAME || "BR-Group" })
+  res.render("index", { COMPANY_NAME: process.env.COMPANY_NAME || "BR-Group" }),
 );
 app.get("/widget", (req, res) =>
   res.render("widget", {
     COMPANY_NAME: "BR-Group",
     BOT_NAME: "Asistente",
     PRIMARY_COLOR: "#4f8cff",
-  })
+  }),
 );
 app.get("/widget.js", (req, res) => {
   res.type("application/javascript");
@@ -318,8 +324,8 @@ app.get("/qr-code", async (req, res) => {
 /* ====================== HEALTH CHECK ENDPOINTS ====================== */
 const { healthRoute, livenessRoute, readinessRoute } = require("./healthcheck");
 app.get("/health", healthRoute);
-app.get("/healthz", livenessRoute);   // Kubernetes liveness probe
-app.get("/readyz", readinessRoute);   // Kubernetes readiness probe
+app.get("/healthz", livenessRoute); // Kubernetes liveness probe
+app.get("/readyz", readinessRoute); // Kubernetes readiness probe
 
 /* ====================== LOGIN & AUTH ====================== */
 app.get("/login", (req, res) => {
@@ -335,17 +341,23 @@ app.get("/login", (req, res) => {
   res.render("login", { error: null });
 });
 // 🛡️ Login con Rate Limiting + Validación
-app.post("/login",
+app.post(
+  "/login",
   loginLimiter,
   [
-    body('username')
+    body("username")
       .trim()
-      .notEmpty().withMessage('Usuario requerido')
-      .isLength({ max: 50 }).withMessage('Usuario muy largo')
-      .matches(/^[a-zA-Z0-9_]+$/).withMessage('Usuario inválido'),
-    body('password')
-      .notEmpty().withMessage('Contraseña requerida')
-      .isLength({ min: 4, max: 100 }).withMessage('Contraseña inválida'),
+      .notEmpty()
+      .withMessage("Usuario requerido")
+      .isLength({ max: 50 })
+      .withMessage("Usuario muy largo")
+      .matches(/^[a-zA-Z0-9_]+$/)
+      .withMessage("Usuario inválido"),
+    body("password")
+      .notEmpty()
+      .withMessage("Contraseña requerida")
+      .isLength({ min: 4, max: 100 })
+      .withMessage("Contraseña inválida"),
   ],
   async (req, res) => {
     // Validar inputs
@@ -357,15 +369,17 @@ app.post("/login",
     const { username, password } = req.body;
     try {
       const user = await DB.getAgent(username);
-      if (!user) return res.render("login", { error: "Credenciales incorrectas" }); // Mensaje genérico por seguridad
+      if (!user)
+        return res.render("login", { error: "Credenciales incorrectas" }); // Mensaje genérico por seguridad
 
       const match = await bcrypt.compare(password, user.password);
-      if (!match) return res.render("login", { error: "Credenciales incorrectas" }); // Mensaje genérico por seguridad
+      if (!match)
+        return res.render("login", { error: "Credenciales incorrectas" }); // Mensaje genérico por seguridad
 
       // Regenerar sesión para prevenir session fixation
       req.session.regenerate((err) => {
         if (err) {
-          console.error('Error regenerando sesión:', err);
+          console.error("Error regenerando sesión:", err);
           return res.render("login", { error: "Error del servidor" });
         }
 
@@ -389,7 +403,7 @@ app.post("/login",
       console.error(e);
       res.render("login", { error: "Error del servidor" });
     }
-  }
+  },
 );
 
 app.get("/logout", (req, res) => {
@@ -442,7 +456,7 @@ app.get(
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
-  }
+  },
 );
 
 app.get(
@@ -456,7 +470,7 @@ app.get(
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
-  }
+  },
 );
 
 // 1. API Estadísticas
@@ -492,7 +506,7 @@ app.delete(
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
-  }
+  },
 );
 
 // server.js (Bajo las rutas de super-admin)
@@ -513,7 +527,10 @@ app.get("/api/wa-status", requireAuth, requireSuperAdmin, async (req, res) => {
     console.log("📱 API /api/wa-status - Estado actual:", status.status);
     // Generate QR data URL if QR exists
     if (status.qr) {
-      const qrDataUrl = await QRCode.toDataURL(status.qr, { margin: 1, scale: 6 });
+      const qrDataUrl = await QRCode.toDataURL(status.qr, {
+        margin: 1,
+        scale: 6,
+      });
       status.qrDataUrl = qrDataUrl;
     }
     res.json(status);
@@ -528,7 +545,11 @@ const waStatusIo = io.of("/wa-status");
 waStatusIo.use(wrap(sessionMiddleware));
 waStatusIo.use((socket, next) => {
   const session = socket.request.session;
-  if (session && session.userId && (session.userRole === "superadmin" || session.userName === "admin")) {
+  if (
+    session &&
+    session.userId &&
+    (session.userRole === "superadmin" || session.userName === "admin")
+  ) {
     next();
   } else {
     next(new Error("unauthorized - superadmin only"));
@@ -545,7 +566,10 @@ waStatusIo.on("connection", async (socket) => {
   // If QR exists, generate data URL
   if (currentStatus.qr) {
     try {
-      currentStatus.qrDataUrl = await QRCode.toDataURL(currentStatus.qr, { margin: 1, scale: 6 });
+      currentStatus.qrDataUrl = await QRCode.toDataURL(currentStatus.qr, {
+        margin: 1,
+        scale: 6,
+      });
     } catch (e) {
       console.error("Error generando QR:", e);
     }
@@ -576,7 +600,10 @@ bridgeIo.on("connection", (socket) => {
     // If QR exists, generate data URL
     if (data.qr && !data.qrDataUrl) {
       try {
-        data.qrDataUrl = await QRCode.toDataURL(data.qr, { margin: 1, scale: 6 });
+        data.qrDataUrl = await QRCode.toDataURL(data.qr, {
+          margin: 1,
+          scale: 6,
+        });
       } catch (e) {
         console.error("Error generando QR:", e);
       }
@@ -666,8 +693,8 @@ adminIo.on("connection", (socket) => {
         payload.propform.op === "alquilar"
           ? "Alquiler"
           : payload.propform.op === "comprar"
-          ? "Venta"
-          : payload.propform.op || "Propiedad";
+            ? "Venta"
+            : payload.propform.op || "Propiedad";
       const tipo = payload.propform.tipo || "";
       topic = `🏠 ${op} ${tipo}`.trim();
     } else if (payload.indice) {
