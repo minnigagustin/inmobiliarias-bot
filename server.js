@@ -13,7 +13,25 @@ const SQLiteStore = require("connect-sqlite3")(session);
 const bcrypt = require("bcryptjs");
 const DB = require("./database");
 
+// 🛡️ MÓDULOS DE SEGURIDAD (Fase 2)
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const { body, validationResult } = require("express-validator");
+const compression = require("compression");
+
 require("dotenv").config();
+
+// 🛡️ Verificar SESSION_SECRET obligatorio
+if (!process.env.SESSION_SECRET) {
+  console.error("❌ FATAL: SESSION_SECRET no está definido en .env");
+  console.error("   Genera uno con: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"");
+  process.exit(1);
+}
+
+// 🛡️ Configuración de CORS origins permitidos
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map(s => s.trim())
+  : ["http://localhost:3000", "https://backpackpuntaalta.ar"];
 
 // 👇 Importa helpers IA adicionales desde engine.js
 const {
@@ -175,25 +193,80 @@ function scheduleAIModeTimeout(chatId, untilTs) {
 const app = express();
 const server = http.createServer(app);
 
-app.use(express.json());
+/// 🛡️ SEGURIDAD: Helmet para headers de seguridad
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "wss:", "ws:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
-app.use(express.urlencoded({ extended: true }));
+// 🛡️ SEGURIDAD: Compresión
+app.use(compression());
 
-// 2. Configuración de Sesiones
+// 🛡️ SEGURIDAD: Rate Limiter Global (100 requests per 15 min)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100,
+  message: { error: "Demasiadas solicitudes, intenta de nuevo más tarde." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for static files and WebSocket
+    return req.path.startsWith('/socket.io') || req.path.startsWith('/uploads');
+  }
+});
+app.use(globalLimiter);
+
+// 🛡️ SEGURIDAD: Rate Limiter para Login (5 requests per 15 min)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5,
+  message: { error: "Demasiados intentos de login, intenta de nuevo en 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(express.json({ limit: '10mb' }));
+
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 2. Configuración de Sesiones (Segura)
+const isProduction = process.env.NODE_ENV === 'production';
 const sessionMiddleware = session({
   store: new SQLiteStore({ db: "sessions.db", dir: "." }),
-  secret: process.env.SESSION_SECRET || "brgroup_secret_fallback_key",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 },
+  cookie: {
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: isProduction, // Solo HTTPS en producción
+  },
+  name: 'br.sid', // Nombre personalizado (no usar default 'connect.sid')
 });
 
 app.use(sessionMiddleware);
 
-// 3. Inicializar Socket.IO
+// 3. Inicializar Socket.IO (con CORS restrictivo)
 const io = new Server(server, {
   maxHttpBufferSize: 10 * 1024 * 1024,
-  cors: { origin: true, methods: ["GET", "POST"], credentials: true },
+  cors: {
+    origin: CORS_ORIGINS,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
 io.engine.on("connection_error", (err) => {
@@ -242,6 +315,12 @@ app.get("/qr-code", async (req, res) => {
   res.send(`<img src="${dataUrl}" />`);
 });
 
+/* ====================== HEALTH CHECK ENDPOINTS ====================== */
+const { healthRoute, livenessRoute, readinessRoute } = require("./healthcheck");
+app.get("/health", healthRoute);
+app.get("/healthz", livenessRoute);   // Kubernetes liveness probe
+app.get("/readyz", readinessRoute);   // Kubernetes readiness probe
+
 /* ====================== LOGIN & AUTH ====================== */
 app.get("/login", (req, res) => {
   // Si ya hay sesión activa, redirigir según rol
@@ -255,35 +334,63 @@ app.get("/login", (req, res) => {
   // Si no, mostrar login
   res.render("login", { error: null });
 });
-app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const user = await DB.getAgent(username);
-    if (!user) return res.render("login", { error: "Usuario no encontrado" });
+// 🛡️ Login con Rate Limiting + Validación
+app.post("/login",
+  loginLimiter,
+  [
+    body('username')
+      .trim()
+      .notEmpty().withMessage('Usuario requerido')
+      .isLength({ max: 50 }).withMessage('Usuario muy largo')
+      .matches(/^[a-zA-Z0-9_]+$/).withMessage('Usuario inválido'),
+    body('password')
+      .notEmpty().withMessage('Contraseña requerida')
+      .isLength({ min: 4, max: 100 }).withMessage('Contraseña inválida'),
+  ],
+  async (req, res) => {
+    // Validar inputs
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.render("login", { error: errors.array()[0].msg });
+    }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.render("login", { error: "Contraseña incorrecta" });
+    const { username, password } = req.body;
+    try {
+      const user = await DB.getAgent(username);
+      if (!user) return res.render("login", { error: "Credenciales incorrectas" }); // Mensaje genérico por seguridad
 
-    // Guardar datos en sesión
-    req.session.userId = user.id;
-    req.session.userName = user.name;
-    req.session.userRole = user.role || "agent"; // 'agent' o 'superadmin'
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) return res.render("login", { error: "Credenciales incorrectas" }); // Mensaje genérico por seguridad
 
-    // Guardar sesión y redirigir según el rol
-    req.session.save(() => {
-      if (req.session.userRole === "superadmin") {
-        console.log(`🛡️ Super Admin logueado: ${user.name}`);
-        res.redirect("/super-admin");
-      } else {
-        console.log(`👤 Agente logueado: ${user.name}`);
-        res.redirect("/admin");
-      }
-    });
-  } catch (e) {
-    console.error(e);
-    res.render("login", { error: "Error del servidor" });
+      // Regenerar sesión para prevenir session fixation
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error('Error regenerando sesión:', err);
+          return res.render("login", { error: "Error del servidor" });
+        }
+
+        // Guardar datos en sesión
+        req.session.userId = user.id;
+        req.session.userName = user.name;
+        req.session.userRole = user.role || "agent";
+
+        // Guardar sesión y redirigir según el rol
+        req.session.save(() => {
+          if (req.session.userRole === "superadmin") {
+            console.log(`🛡️ Super Admin logueado: ${user.name}`);
+            res.redirect("/super-admin");
+          } else {
+            console.log(`👤 Agente logueado: ${user.name}`);
+            res.redirect("/admin");
+          }
+        });
+      });
+    } catch (e) {
+      console.error(e);
+      res.render("login", { error: "Error del servidor" });
+    }
   }
-});
+);
 
 app.get("/logout", (req, res) => {
   req.session.destroy();
@@ -399,6 +506,54 @@ app.put("/api/agents/:id", requireAuth, requireSuperAdmin, async (req, res) => {
   }
 });
 
+// API WhatsApp Status (Super Admin only)
+app.get("/api/wa-status", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const status = qrStore.get();
+    console.log("📱 API /api/wa-status - Estado actual:", status.status);
+    // Generate QR data URL if QR exists
+    if (status.qr) {
+      const qrDataUrl = await QRCode.toDataURL(status.qr, { margin: 1, scale: 6 });
+      status.qrDataUrl = qrDataUrl;
+    }
+    res.json(status);
+  } catch (e) {
+    console.error("❌ Error en /api/wa-status:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* ====================== SOCKETS - WA STATUS (Super Admin only) ====================== */
+const waStatusIo = io.of("/wa-status");
+waStatusIo.use(wrap(sessionMiddleware));
+waStatusIo.use((socket, next) => {
+  const session = socket.request.session;
+  if (session && session.userId && (session.userRole === "superadmin" || session.userName === "admin")) {
+    next();
+  } else {
+    next(new Error("unauthorized - superadmin only"));
+  }
+});
+
+waStatusIo.on("connection", async (socket) => {
+  console.log("📱 Super-admin conectado a wa-status, socket.id:", socket.id);
+  console.log("📱 Total clientes wa-status:", waStatusIo.sockets.size);
+  // Send current status on connect
+  const currentStatus = qrStore.get();
+  console.log("📱 Estado actual en archivo:", JSON.stringify(currentStatus));
+
+  // If QR exists, generate data URL
+  if (currentStatus.qr) {
+    try {
+      currentStatus.qrDataUrl = await QRCode.toDataURL(currentStatus.qr, { margin: 1, scale: 6 });
+    } catch (e) {
+      console.error("Error generando QR:", e);
+    }
+  }
+
+  socket.emit("wa_status", currentStatus);
+});
+
 /* ====================== SOCKETS - BRIDGE (WhatsApp) ====================== */
 const bridgeIo = io.of("/bridge");
 const bridgeChats = new Map();
@@ -412,6 +567,23 @@ bridgeIo.on("connection", (socket) => {
     if (!chatId || !msg) return;
     pushTranscript(chatId, msg);
     fanoutToAgentIfNeeded(chatId, msg);
+  });
+  // Forward wa_status events to super-admin namespace
+  socket.on("wa_status", async (data) => {
+    console.log("📱 Bridge recibió wa_status:", data.status);
+    console.log("📱 Clientes conectados a wa-status:", waStatusIo.sockets.size);
+
+    // If QR exists, generate data URL
+    if (data.qr && !data.qrDataUrl) {
+      try {
+        data.qrDataUrl = await QRCode.toDataURL(data.qr, { margin: 1, scale: 6 });
+      } catch (e) {
+        console.error("Error generando QR:", e);
+      }
+    }
+
+    console.log("📱 Emitiendo wa_status a super-admins:", data.status);
+    waStatusIo.emit("wa_status", data);
   });
   socket.on("disconnect", () => {
     for (const [id, sid] of bridgeChats.entries())

@@ -70,11 +70,34 @@ function scheduleAIModeTimeoutWA(chatId, untilTs) {
 }
 
 // Eventos del bridge
-bridge.on("connect", () => console.log("🔗 Bridge conectado:", BRIDGE_URL));
-bridge.on("connect_error", (e) =>
-  console.error("❌ Bridge error:", e?.message || e)
-);
-bridge.on("disconnect", () => console.log("🔌 Bridge desconectado"));
+let bridgeConnected = false;
+
+bridge.on("connect", () => {
+  console.log("🔗 Bridge conectado:", BRIDGE_URL);
+  bridgeConnected = true;
+  // Send current status when bridge connects/reconnects
+  const currentStatus = qrStore.get();
+  emitWaStatus(currentStatus);
+});
+bridge.on("connect_error", (e) => {
+  console.error("❌ Bridge error:", e?.message || e);
+  bridgeConnected = false;
+});
+bridge.on("disconnect", () => {
+  console.log("🔌 Bridge desconectado");
+  bridgeConnected = false;
+});
+
+// Helper to safely emit wa_status
+function emitWaStatus(data) {
+  // Emit to bridge if connected
+  if (bridgeConnected) {
+    bridge.emit("wa_status", data);
+    console.log("📤 wa_status emitido:", data.status);
+  } else {
+    console.log("⚠️ Bridge no conectado, estado guardado localmente:", data.status);
+  }
+}
 
 // Orden desde el panel: un agente tomó el caso
 bridge.on("agent_assigned", async ({ chatId, agent }) => {
@@ -188,24 +211,188 @@ const client = new Client({
     timeout: 0,
   },
 });
+// Set initializing status on startup
+qrStore.setInitializing();
+
 client.on("qr", (qr) => {
   qrStore.setQR(qr);
+  // Emit wa_status event to bridge for super-admin
+  emitWaStatus({ status: "qr_pending", qr });
   // si querés seguir mostrando en consola:
   qrcode.generate(qr, { small: true });
 });
 
+client.on("authenticated", () => {
+  console.log("🔐 WhatsApp autenticado - esperando evento 'ready'...");
+  // Status intermedio entre QR escaneado y listo
+  qrStore.setStatus("authenticated");
+  emitWaStatus({ status: "authenticated" });
+
+  // Workaround: Si 'ready' no llega en 30 segundos, verificamos manualmente
+  setTimeout(async () => {
+    const currentState = qrStore.get();
+    if (currentState.status === "authenticated") {
+      console.log("⚠️ 'ready' no recibido después de 30s, verificando estado manualmente...");
+      try {
+        // Intentar obtener info del cliente para verificar si está listo
+        const state = await client.getState();
+        console.log("📱 Estado del cliente:", state);
+        if (state === "CONNECTED") {
+          console.log("✅ Cliente conectado (detectado manualmente)");
+          qrStore.setReady();
+          emitWaStatus({ status: "ready" });
+        }
+      } catch (e) {
+        console.log("⚠️ No se pudo verificar estado:", e.message);
+      }
+    }
+  }, 30000);
+});
+
+// Add loading_screen event for debugging
+client.on("loading_screen", (percent, message) => {
+  console.log(`📱 WhatsApp cargando: ${percent}% - ${message}`);
+});
+
+// Add change_state event for debugging
+client.on("change_state", (state) => {
+  console.log(`📱 WhatsApp cambio de estado: ${state}`);
+  // Si el estado cambia a CONNECTED y aún no estamos en "ready", actualizar
+  if (state === "CONNECTED") {
+    const currentStatus = qrStore.get();
+    if (currentStatus.status !== "ready") {
+      console.log("✅ Detectado CONNECTED via change_state");
+      qrStore.setReady();
+      emitWaStatus({ status: "ready" });
+    }
+  }
+});
+
 client.on("ready", () => {
+  console.log("✅ WhatsApp listo - actualizando estado...");
   qrStore.setReady();
-  console.log("✅ WhatsApp listo");
+  console.log("✅ Estado actualizado en archivo");
+  // Emit wa_status event to bridge for super-admin
+  console.log("✅ Bridge conectado?", bridgeConnected);
+  emitWaStatus({ status: "ready" });
+  console.log("✅ Evento wa_status emitido");
+  // Reset reconnect attempts on successful connection
+  reconnectAttempts = 0;
+});
+
+// 🛡️ Robust Reconnection with Exponential Backoff
+const RECONNECT_CONFIG = {
+  maxAttempts: 5,
+  baseDelay: 5000, // 5 seconds
+  maxDelay: 60000, // 60 seconds max
+};
+let reconnectAttempts = 0;
+let reconnectTimeout = null;
+
+async function attemptReconnect() {
+  if (reconnectAttempts >= RECONNECT_CONFIG.maxAttempts) {
+    console.error("❌ Máximo de intentos de reconexión alcanzado. Reinicia el proceso manualmente.");
+    qrStore.setStatus("reconnect_failed");
+    emitWaStatus({ status: "reconnect_failed", attempts: reconnectAttempts });
+    return;
+  }
+
+  reconnectAttempts++;
+  const delay = Math.min(
+    RECONNECT_CONFIG.baseDelay * Math.pow(2, reconnectAttempts - 1),
+    RECONNECT_CONFIG.maxDelay
+  );
+
+  console.log(`🔄 Intentando reconexión ${reconnectAttempts}/${RECONNECT_CONFIG.maxAttempts} en ${delay / 1000}s...`);
+  qrStore.setStatus("reconnecting");
+  emitWaStatus({ status: "reconnecting", attempt: reconnectAttempts, nextAttemptIn: delay });
+
+  reconnectTimeout = setTimeout(async () => {
+    try {
+      // Try to destroy existing client first
+      try {
+        await client.destroy();
+        console.log("🗑️ Cliente anterior destruido");
+      } catch (destroyErr) {
+        // Ignore destroy errors
+      }
+
+      // Small delay before reinitializing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      await client.initialize();
+      reconnectAttempts = 0; // Reset on success
+      console.log("✅ Reconexión exitosa");
+    } catch (err) {
+      console.error("❌ Error en reconexión:", err.message);
+      attemptReconnect();
+    }
+  }, delay);
+}
+
+function cancelReconnect() {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+  reconnectAttempts = 0;
+}
+
+client.on("disconnected", (reason) => {
+  qrStore.setDisconnected();
+  // Emit wa_status event to bridge for super-admin
+  emitWaStatus({ status: "disconnected", reason });
+  console.log("🔌 WhatsApp desconectado:", reason);
+
+  // Attempt reconnection
+  if (reason !== "LOGOUT") {
+    attemptReconnect();
+  }
+});
+
+client.on("auth_failure", (msg) => {
+  qrStore.setAuthFailure();
+  // Emit wa_status event to bridge for super-admin
+  emitWaStatus({ status: "auth_failure", message: msg });
+  console.log("❌ Error de autenticación WhatsApp:", msg);
+  // Don't auto-reconnect on auth failure - requires QR scan
+});
+
+// Add error event for debugging
+client.on("remote_session_saved", () => {
+  console.log("💾 Sesión remota guardada");
+});
+
+// Listen for any errors from puppeteer
+client.pupPage?.on("error", (err) => {
+  console.error("❌ Puppeteer page error:", err);
+});
+
+client.pupPage?.on("pageerror", (err) => {
+  console.error("❌ Puppeteer page JS error:", err);
 });
 
 /** Cache de media por chat para reenviarlas al agente por WhatsApp (opcional) */
 const mediaCache = new Map(); // Map<chatId, Array<MessageMedia>>
+const MEDIA_CACHE_MAX_CHATS = 50; // 🛡️ Límite máximo de chats en cache
+const MEDIA_CACHE_MAX_PER_CHAT = 10; // Máximo de media por chat
+
 function pushMedia(chatId, media) {
+  // 🛡️ LRU Eviction: Si alcanzamos el límite, eliminamos el chat más antiguo
+  if (!mediaCache.has(chatId) && mediaCache.size >= MEDIA_CACHE_MAX_CHATS) {
+    const oldestChatId = mediaCache.keys().next().value;
+    mediaCache.delete(oldestChatId);
+    console.log(`🗑️ Media cache LRU: eliminado chat ${oldestChatId}`);
+  }
+
   if (!mediaCache.has(chatId)) mediaCache.set(chatId, []);
   const arr = mediaCache.get(chatId);
   arr.push(media);
-  if (arr.length > 10) arr.shift(); // límite
+  if (arr.length > MEDIA_CACHE_MAX_PER_CHAT) arr.shift(); // límite por chat
+
+  // Mover el chat al final (más reciente) para LRU
+  mediaCache.delete(chatId);
+  mediaCache.set(chatId, arr);
 }
 function clearMedia(chatId) {
   mediaCache.delete(chatId);
@@ -438,4 +625,40 @@ client.on("message", async (msg) => {
   }
 });
 
-client.initialize();
+// Graceful initialization with error handling
+async function initializeWhatsApp() {
+  try {
+    console.log("🚀 Iniciando cliente WhatsApp...");
+    await client.initialize();
+  } catch (err) {
+    console.error("❌ Error inicializando WhatsApp:", err.message);
+
+    // Check if it's a session corruption issue
+    if (err.message.includes("Execution context was destroyed") ||
+        err.message.includes("Session closed") ||
+        err.message.includes("Target closed")) {
+      console.log("⚠️ Posible sesión corrupta. Intentando reconexión...");
+      qrStore.setDisconnected();
+      emitWaStatus({ status: "error", message: err.message });
+
+      // Attempt reconnection after delay
+      setTimeout(() => {
+        attemptReconnect();
+      }, 5000);
+    } else {
+      // For other errors, just log and try to reconnect
+      qrStore.setStatus("error");
+      emitWaStatus({ status: "error", message: err.message });
+      attemptReconnect();
+    }
+  }
+}
+
+// Handle unhandled rejections from Puppeteer
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection:', reason);
+  // Don't exit - let the reconnection logic handle it
+});
+
+// Start WhatsApp client
+initializeWhatsApp();

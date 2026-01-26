@@ -1,27 +1,42 @@
 {
   "name": "bot-whatsapp-nlu",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Bot inmobiliario con whatsapp-web.js + NLU (OpenAI) y flujo natural en español.",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
     "start:web": "node server.js",
     "start:wa": "node index.js",
     "start:omni": "concurrently -k -n WEB,WA -c \"cyan,green\" \"node server.js\" \"node index.js\"",
-    "start": "node server.js"
+    "start:prod": "NODE_ENV=production node server.js",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:logs": "pm2 logs",
+    "pm2:status": "pm2 status",
+    "docker:build": "docker build -t br-whatsapp-bot .",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "health": "curl -s http://localhost:3000/health | json_pp"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "concurrently": "^8.2.2",
     "connect-sqlite3": "^0.9.16",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "es-compromise": "^0.2.11",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.2",
+    "express-validator": "^7.3.1",
     "he": "^1.2.0",
+    "helmet": "^8.1.0",
     "lodash.deburr": "^4.1.0",
     "openai": "^4.58.1",
     "qrcode": "^1.5.4",
@@ -29,6 +44,7 @@
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.8.1",
     "sqlite3": "^5.1.7",
-    "whatsapp-web.js": "^1.32.0"
+    "whatsapp-web.js": "^1.32.0",
+    "winston": "^3.19.0"
   }
 }

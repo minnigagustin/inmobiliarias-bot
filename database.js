@@ -45,6 +45,20 @@ db.serialize(() => {
   db.run("ALTER TABLE tickets ADD COLUMN rating INTEGER", (err) => {
     // Si da error es porque ya existe, lo ignoramos.
   });
+
+  // 🛡️ FASE 2: Índices para mejorar rendimiento
+  db.run("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)", (err) => {
+    if (!err) console.log("📊 Índice idx_messages_chat_id creado/verificado");
+  });
+  db.run("CREATE INDEX IF NOT EXISTS idx_tickets_agent_id ON tickets(agent_id)", (err) => {
+    if (!err) console.log("📊 Índice idx_tickets_agent_id creado/verificado");
+  });
+  db.run("CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)", (err) => {
+    if (!err) console.log("📊 Índice idx_tickets_status creado/verificado");
+  });
+  db.run("CREATE INDEX IF NOT EXISTS idx_tickets_chat_id ON tickets(chat_id)", (err) => {
+    if (!err) console.log("📊 Índice idx_tickets_chat_id creado/verificado");
+  });
 });
 
 // Crear admin por defecto como superadmin

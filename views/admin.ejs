@@ -4,206 +4,434 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel Operativo | BR-Group</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono&display=swap" rel="stylesheet">
   <style>
-    /* --- VARIABLES & RESET --- */
+    @import url('https://api.fontshare.com/v2/css?f[]=clash-display@600,700&f[]=general-sans@400,500,600&display=swap');
+
     :root {
-      --bg-dark: #0f172a;
-      --bg-panel: #1e293b;
-      --bg-chat: #020617;
-      --accent: #22d3ee;
-      --accent-hover: #06b6d4;
-      --text: #f1f5f9;
-      --text-dim: #94a3b8;
-      --border: rgba(255, 255, 255, 0.08);
-      --msg-user: #334155;
-      --msg-agent: #0891b2;
+      --bg-base: #08080c;
+      --bg-sidebar: #0d0d12;
+      --bg-chat: #0a0a0f;
+      --bg-elevated: #141418;
+      --bg-card: #18181f;
+      --accent: #d4a853;
+      --accent-dim: rgba(212, 168, 83, 0.12);
+      --accent-glow: rgba(212, 168, 83, 0.25);
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #52525b;
+      --border: rgba(255, 255, 255, 0.06);
+      --success: #22c55e;
+      --success-dim: rgba(34, 197, 94, 0.12);
       --danger: #ef4444;
-      --success: #10b981;
+      --danger-dim: rgba(239, 68, 68, 0.12);
+      --user-bubble: #27272a;
+      --agent-bubble: #d4a853;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; outline: none; font-family: 'Segoe UI', system-ui, sans-serif; }
-
-    body {
-      height: 100vh;
-      background-color: var(--bg-dark);
-      color: var(--text);
-      overflow: hidden; /* Evita scroll en el body */
-      display: flex;
-      flex-direction: column;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      font-family: 'General Sans', -apple-system, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      overflow: hidden;
     }
 
-    /* --- LAYOUT PRINCIPAL (GRID) --- */
+    /* Layout */
     .dashboard {
       display: grid;
-      grid-template-columns: 320px 1fr; /* Sidebar fijo, Chat flexible */
+      grid-template-columns: 340px 1fr;
       height: 100vh;
-      width: 100vw;
     }
 
-    /* --- SIDEBAR (COLA) --- */
+    /* Sidebar */
     .sidebar {
-      background: var(--bg-panel);
+      background: var(--bg-sidebar);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       height: 100%;
+    }
+
+    .sidebar-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .agent-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .agent-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .agent-name {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+
+    .agent-status {
+      font-size: 0.8rem;
+      color: var(--success);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .queue-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
     }
 
-    .header {
-      padding: 20px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(0,0,0,0.2);
-    }
-    .agent-name { font-weight: 700; font-size: 1.1rem; color: #fff; }
-    .agent-status { font-size: 0.8rem; color: var(--success); display: flex; align-items: center; gap: 6px; }
-    .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; display: inline-block; }
-
     .queue-header {
-      padding: 15px 20px;
-      font-size: 0.75rem;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .queue-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-dim);
-      font-weight: 700;
-      background: rgba(255,255,255,0.02);
+      color: var(--text-muted);
+    }
+
+    .queue-count {
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
     }
 
     .queue-list {
       flex: 1;
       overflow-y: auto;
-      padding: 15px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
     }
 
-    /* Tarjeta de la Cola */
-    .queue-card {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      transition: all 0.2s;
-      animation: slideIn 0.3s ease;
+    .queue-empty {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 40px 20px;
+      font-size: 0.9rem;
     }
-    @keyframes slideIn { from{opacity:0; transform:translateY(5px)} to{opacity:1; transform:translateY(0)} }
-    
-    .queue-card:hover { border-color: var(--accent); background: rgba(34, 211, 238, 0.05); }
-    
-    .q-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 6px; }
-    .q-reason { font-weight: 600; color: #fff; margin-bottom: 10px; display: block; }
-    
+
+    .queue-empty svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      opacity: 0.3;
+    }
+
+    /* Queue Card */
+    .queue-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      transition: all 0.25s;
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .queue-card:hover {
+      border-color: var(--accent);
+      background: rgba(212, 168, 83, 0.03);
+    }
+
+    .q-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .q-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .q-id {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.05);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .q-reason {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+
     .btn-take {
       width: 100%;
-      padding: 8px;
-      border-radius: 6px;
+      padding: 10px 16px;
+      border-radius: 10px;
       border: none;
       background: var(--success);
-      color: #fff;
+      color: white;
+      font-family: inherit;
       font-weight: 600;
-      cursor: pointer;
       font-size: 0.85rem;
-      transition: 0.2s;
+      cursor: pointer;
+      transition: all 0.2s;
     }
-    .btn-take:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    .btn-take:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+    }
 
     .sidebar-footer {
-      padding: 15px;
+      padding: 20px 24px;
       border-top: 1px solid var(--border);
-      text-align: center;
     }
-    .btn-logout { color: var(--danger); text-decoration: none; font-size: 0.9rem; font-weight: 600; }
 
-    /* --- CHAT AREA --- */
+    .btn-logout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.85rem;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn-logout:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: var(--danger-dim);
+    }
+
+    /* Chat Area */
     .chat-area {
       background: var(--bg-chat);
-      background-image: radial-gradient(circle at top right, #1e293b 0%, transparent 40%);
-      position: relative;
       display: flex;
       flex-direction: column;
       height: 100%;
-      overflow: hidden; /* CRÍTICO: Evita que el input se salga */
+      position: relative;
     }
 
-    /* Estado Vacío */
+    /* Empty State */
     #empty-state {
-      position: absolute; top:0; left:0; width:100%; height:100%;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      color: var(--text-dim);
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
       z-index: 10;
-      background: var(--bg-chat);
     }
-    #empty-state svg { width: 80px; height: 80px; opacity: 0.2; margin-bottom: 20px; }
 
-    /* Contenedor del Chat Activo */
+    #empty-state svg {
+      width: 80px;
+      height: 80px;
+      opacity: 0.15;
+      margin-bottom: 20px;
+    }
+
+    #empty-state p {
+      font-size: 1rem;
+      max-width: 280px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    /* Active Chat */
     #active-chat {
-      display: none; /* Se activa con JS */
+      display: none;
       flex-direction: column;
       height: 100%;
-      width: 100%;
     }
 
-    /* 1. Header del Chat */
     .chat-header {
-      flex-shrink: 0; /* No encoger */
-      height: 60px;
-      padding: 0 20px;
+      flex-shrink: 0;
+      padding: 16px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(10px);
+      background: var(--bg-elevated);
       border-bottom: 1px solid var(--border);
-      z-index: 5;
     }
-    .chat-user-info { display: flex; flex-direction: column; }
-    .chat-id { font-weight: 700; font-size: 1rem; }
-    .chat-label { font-size: 0.75rem; color: var(--text-dim); }
+
+    .chat-user-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .chat-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .chat-id {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .chat-label {
+      font-size: 0.75rem;
+      color: var(--success);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
 
     .btn-finish {
-      background: transparent;
+      padding: 8px 16px;
+      border-radius: 8px;
       border: 1px solid var(--danger);
+      background: transparent;
       color: var(--danger);
-      padding: 6px 14px;
-      border-radius: 6px;
+      font-family: inherit;
+      font-weight: 600;
       font-size: 0.85rem;
       cursor: pointer;
-      font-weight: 600;
-      transition: 0.2s;
+      transition: all 0.2s;
     }
-    .btn-finish:hover { background: var(--danger); color: #fff; }
 
-    /* 2. Panel de Detalles (Case Info) */
+    .btn-finish:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    /* Case Info */
     .case-info {
-      flex-shrink: 0; /* No encoger */
-      background: rgba(30, 41, 59, 0.4);
+      flex-shrink: 0;
+      background: var(--bg-elevated);
       border-bottom: 1px solid var(--border);
-      padding: 10px 20px;
-      font-size: 0.85rem;
-      display: none; /* JS toggle */
+      padding: 16px 24px;
+      display: none;
     }
-    .case-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-    .case-item strong { color: var(--accent); display: block; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 2px; }
-    .case-item span { color: #fff; }
-    
-    .case-photos { margin-top: 10px; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; }
-    .thumb { height: 50px; width: 50px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); cursor: zoom-in; }
 
-    /* 3. Hilo de Mensajes (SCROLLABLE AREA) */
+    .case-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .case-item strong {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .case-item span {
+      color: var(--text-primary);
+      font-size: 0.9rem;
+    }
+
+    .case-photos {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .thumb {
+      height: 56px;
+      width: 56px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .thumb:hover {
+      border-color: var(--accent);
+      transform: scale(1.05);
+    }
+
+    /* Thread */
     .thread {
-      flex: 1; /* Ocupa todo el espacio restante */
-      overflow-y: auto; /* Scroll aquí */
-      min-height: 0; /* Fix para Firefox/Flexbox */
-      padding: 20px;
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 15px;
+      gap: 16px;
+      min-height: 0;
     }
 
-    /* Burbujas */
-    .msg-row { display: flex; width: 100%; }
+    .msg-row {
+      display: flex;
+      width: 100%;
+      animation: msgIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     .msg-row.user { justify-content: flex-start; }
     .msg-row.agent { justify-content: flex-end; }
     .msg-row.bot { justify-content: center; }
@@ -211,110 +439,205 @@
 
     .msg-bubble {
       max-width: 70%;
-      padding: 10px 14px;
-      border-radius: 12px;
+      padding: 12px 16px;
+      border-radius: 16px;
       font-size: 0.95rem;
-      line-height: 1.4;
-      position: relative;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      line-height: 1.5;
     }
-    
-    .msg-row.user .msg-bubble { background: var(--msg-user); border-bottom-left-radius: 2px; color: #fff; }
-    .msg-row.agent .msg-bubble { background: var(--msg-agent); border-bottom-right-radius: 2px; color: #fff; }
-    
-    .msg-row.bot .msg-bubble { 
-      background: transparent; border: 1px solid var(--border); color: var(--text-dim); font-size: 0.85rem; max-width: 80%; text-align: center; 
+
+    .msg-row.user .msg-bubble {
+      background: var(--user-bubble);
+      border-bottom-left-radius: 4px;
     }
-    
+
+    .msg-row.agent .msg-bubble {
+      background: var(--agent-bubble);
+      color: var(--bg-base);
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-row.bot .msg-bubble {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      max-width: 80%;
+      text-align: center;
+    }
+
     .msg-row.system .msg-bubble {
-      background: rgba(34,211,238,0.1); color: var(--accent); font-size: 0.8rem; padding: 4px 12px; border-radius: 20px; font-weight: 600;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-size: 0.8rem;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 500;
     }
 
-    .msg-meta { display: block; font-size: 0.7rem; margin-top: 4px; opacity: 0.6; text-align: right; }
-    .msg-img { max-width: 100%; border-radius: 8px; margin-bottom: 5px; display: block; }
+    .msg-meta {
+      display: block;
+      font-size: 0.7rem;
+      margin-top: 6px;
+      opacity: 0.6;
+      text-align: right;
+    }
 
-    /* 4. Input Area (FIJO ABAJO) */
+    .msg-img {
+      max-width: 100%;
+      max-height: 200px;
+      border-radius: 12px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    /* Input Area */
     .input-area {
-      flex-shrink: 0; /* No encoger */
-      padding: 15px 20px;
-      background: var(--bg-panel);
+      flex-shrink: 0;
+      padding: 20px 24px;
+      background: var(--bg-elevated);
       border-top: 1px solid var(--border);
       display: flex;
-      gap: 10px;
+      gap: 12px;
       align-items: center;
     }
-    
+
     #chatInput {
       flex: 1;
-      background: rgba(0,0,0,0.3);
+      padding: 14px 18px;
+      border-radius: 12px;
       border: 1px solid var(--border);
-      color: #fff;
-      padding: 12px;
-      border-radius: 8px;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: inherit;
       font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s;
     }
-    #chatInput:focus { border-color: var(--accent); }
+
+    #chatInput::placeholder {
+      color: var(--text-muted);
+    }
+
+    #chatInput:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
 
     #sendBtn {
-      background: var(--accent);
-      color: #000;
+      padding: 14px 24px;
+      border-radius: 12px;
       border: none;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-weight: 700;
+      background: var(--accent);
+      color: var(--bg-base);
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: 0.9rem;
       cursor: pointer;
+      transition: all 0.2s;
     }
-    #sendBtn:hover { background: var(--accent-hover); }
 
+    #sendBtn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px var(--accent-glow);
+    }
+
+    /* Scrollbar */
+    .queue-list::-webkit-scrollbar,
+    .thread::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .queue-list::-webkit-scrollbar-track,
+    .thread::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .queue-list::-webkit-scrollbar-thumb,
+    .thread::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
-
   <div class="dashboard">
     <div class="sidebar">
-      <div class="header">
-        <div class="agent-name"><%= agentName %></div>
-        <div class="agent-status"><span class="dot"></span> En línea</div>
+      <div class="sidebar-header">
+        <div class="agent-info">
+          <div class="agent-avatar">👤</div>
+          <div>
+            <div class="agent-name"><%= agentName %></div>
+            <div class="agent-status">
+              <span class="status-dot"></span> En línea
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <div class="queue-header">Cola de Espera</div>
-      <div id="queue-list" class="queue-list">
-        <div style="text-align:center; color:var(--text-dim); padding-top:20px; font-size:0.9rem">
-          Sin clientes en espera.
+
+      <div class="queue-section">
+        <div class="queue-header">
+          <span class="queue-title">Cola de Espera</span>
+          <span class="queue-count" id="queue-count">0</span>
+        </div>
+        <div id="queue-list" class="queue-list">
+          <div class="queue-empty">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            </svg>
+            Sin clientes en espera
+          </div>
         </div>
       </div>
 
       <div class="sidebar-footer">
-        <a href="/logout" class="btn-logout">Cerrar Sesión</a>
+        <a href="/logout" class="btn-logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Cerrar Sesión
+        </a>
       </div>
     </div>
 
     <div class="chat-area">
-      
       <div id="empty-state">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
-        <p>Seleccioná un usuario de la cola para comenzar</p>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        <p>Seleccioná un cliente de la cola para comenzar a chatear</p>
       </div>
 
       <div id="active-chat">
-        
         <div class="chat-header">
           <div class="chat-user-info">
-            <span class="chat-id" id="chat-title">Usuario</span>
-            <span class="chat-label">Chat en curso</span>
+            <div class="chat-avatar">💬</div>
+            <div>
+              <span class="chat-id" id="chat-title">Usuario</span>
+              <span class="chat-label"><span class="status-dot"></span> Chat activo</span>
+            </div>
           </div>
-          <button id="finishBtn" class="btn-finish">Finalizar Chat</button>
+          <button id="finishBtn" class="btn-finish">Finalizar</button>
         </div>
 
         <div id="case-details" class="case-info"></div>
-
         <div id="thread" class="thread"></div>
 
         <div class="input-area">
-          <input type="text" id="chatInput" placeholder="Escribí un mensaje..." autocomplete="off">
+          <input type="text" id="chatInput" placeholder="Escribí tu respuesta..." autocomplete="off">
           <button id="sendBtn">Enviar</button>
         </div>
-
       </div>
     </div>
   </div>
@@ -324,8 +647,8 @@
     const socket = io('/admin');
     let currentChatId = null;
 
-    // Referencias DOM
     const queueList = document.getElementById('queue-list');
+    const queueCount = document.getElementById('queue-count');
     const emptyState = document.getElementById('empty-state');
     const activeChat = document.getElementById('active-chat');
     const thread = document.getElementById('thread');
@@ -333,22 +656,28 @@
     const chatTitle = document.getElementById('chat-title');
     const input = document.getElementById('chatInput');
 
-    // --- SOCKET LOGIC ---
-
     socket.on('connect_error', () => window.location.href = '/login');
 
     socket.on('queue_snapshot', (list) => {
+      updateQueueCount(list.length);
       queueList.innerHTML = '';
       if(list.length === 0) {
-        queueList.innerHTML = `<div style="text-align:center; color:#94a3b8; padding-top:20px; font-size:0.9rem">Sin clientes en espera.</div>`;
+        queueList.innerHTML = `<div class="queue-empty">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+          </svg>
+          Sin clientes en espera
+        </div>`;
         return;
       }
       list.forEach(renderQueueItem);
     });
 
     socket.on('queue_add', (rec) => {
-      if(queueList.innerText.includes('Sin clientes')) queueList.innerHTML = '';
+      const empty = queueList.querySelector('.queue-empty');
+      if(empty) empty.remove();
       renderQueueItem(rec);
+      updateQueueCount(queueList.querySelectorAll('.queue-card').length);
     });
 
     socket.on('queue_remove', ({chatId}) => {
@@ -356,23 +685,31 @@
       if(el) {
         el.style.opacity = '0';
         el.style.transform = 'translateX(-10px)';
-        setTimeout(() => el.remove(), 200);
+        setTimeout(() => {
+          el.remove();
+          const count = queueList.querySelectorAll('.queue-card').length;
+          updateQueueCount(count);
+          if(count === 0) {
+            queueList.innerHTML = `<div class="queue-empty">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+              </svg>
+              Sin clientes en espera
+            </div>`;
+          }
+        }, 200);
       }
     });
 
     socket.on('assigned', ({ chatId, transcript, payload }) => {
       emptyState.style.display = 'none';
-      activeChat.style.display = 'flex'; // Usamos flex para que el height funcione
-      
+      activeChat.style.display = 'flex';
       currentChatId = chatId;
-      chatTitle.innerText = chatId;
-      
+      chatTitle.innerText = chatId.slice(-8);
       renderCaseInfo(payload);
-
       thread.innerHTML = '';
       transcript.forEach(renderMessage);
       scrollToBottom();
-
       input.focus();
     });
 
@@ -383,18 +720,20 @@
       }
     });
 
-    // --- RENDERING HELPERS ---
+    function updateQueueCount(n) {
+      queueCount.textContent = n;
+    }
 
     function renderQueueItem(rec) {
       const div = document.createElement('div');
       div.className = 'queue-card';
       div.id = `q-${rec.chatId}`;
       div.innerHTML = `
-        <div class="q-meta">
-          <span>Hace un momento</span>
-          <span>${rec.chatId.slice(-4)}</span>
+        <div class="q-header">
+          <span class="q-time">Hace un momento</span>
+          <span class="q-id">${rec.chatId.slice(-6)}</span>
         </div>
-        <span class="q-reason">${getReasonText(rec.payload)}</span>
+        <div class="q-reason">${getReasonText(rec.payload)}</div>
         <button class="btn-take" onclick="takeChat('${rec.chatId}')">Tomar Caso</button>
       `;
       queueList.appendChild(div);
@@ -403,25 +742,16 @@
     function renderMessage(msg) {
       const row = document.createElement('div');
       row.className = `msg-row ${msg.who}`;
-
       const bubble = document.createElement('div');
       bubble.className = 'msg-bubble';
-
       let content = msg.text || '';
-      
       if(msg.type === 'image') {
         content = `<a href="${msg.url}" target="_blank"><img src="${msg.url}" class="msg-img"></a>`;
         if(msg.text) content += `<div>${msg.text}</div>`;
       }
-      
-      // 🔥 FIX: Acepta 'ts' (vivo) o 'timestamp' (historial)
       const dateVal = msg.ts || msg.timestamp;
-      const time = dateVal 
-        ? new Date(dateVal).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) 
-        : '';
-
-      bubble.innerHTML = `${content} <span class="msg-meta">${time}</span>`;
-      
+      const time = dateVal ? new Date(dateVal).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+      bubble.innerHTML = `${content}<span class="msg-meta">${time}</span>`;
       row.appendChild(bubble);
       thread.appendChild(row);
     }
@@ -429,41 +759,27 @@
     function renderCaseInfo(p) {
       caseDetails.style.display = 'none';
       caseDetails.innerHTML = '';
-      
       if(!p) return;
-
       let items = '';
-      
-      // Mantenimiento
       if(p.categoria) {
         items += makeItem('Categoría', p.categoria);
         items += makeItem('Dirección', p.direccion);
         items += makeItem('Descripción', p.descripcion);
-      }
-      // Propiedades
-      else if(p.propform) {
+      } else if(p.propform) {
         items += makeItem('Operación', `${p.propform.op} ${p.propform.tipo}`);
-        items += makeItem('Zona/Ciudad', p.propform.city || p.propform.direccion);
+        items += makeItem('Zona', p.propform.city || p.propform.direccion);
         items += makeItem('Presupuesto', `${p.propform.moneda||'$'} ${p.propform.presupuesto||'-'}`);
         items += makeItem('Detalles', `${p.propform.dorm||0} Dorm / ${p.propform.banos||0} Baños`);
-      }
-      // Índice
-      else if(p.indice) {
+      } else if(p.indice) {
         items += makeItem('Índice', p.indice);
         items += makeItem('Cálculo', p.calculo);
-      }
-      // Motivo simple
-      else if(p.motivo) {
+      } else if(p.motivo) {
         items += makeItem('Motivo', p.motivo);
       }
-
       let photosHtml = '';
       if(p.fotos && p.fotos.length) {
-        photosHtml = `<div class="case-photos">
-          ${p.fotos.map(url => `<a href="${url}" target="_blank"><img src="${url}" class="thumb"></a>`).join('')}
-        </div>`;
+        photosHtml = `<div class="case-photos">${p.fotos.map(url => `<a href="${url}" target="_blank"><img src="${url}" class="thumb"></a>`).join('')}</div>`;
       }
-
       if(items) {
         caseDetails.innerHTML = `<div class="case-grid">${items}</div>${photosHtml}`;
         caseDetails.style.display = 'block';
@@ -484,13 +800,8 @@
     }
 
     function scrollToBottom() {
-      // Pequeño timeout para asegurar que el render terminó
-      setTimeout(() => {
-        thread.scrollTop = thread.scrollHeight;
-      }, 50);
+      setTimeout(() => { thread.scrollTop = thread.scrollHeight; }, 50);
     }
-
-    // --- ACCIONES ---
 
     window.takeChat = (chatId) => {
       socket.emit('assign', { chatId });
@@ -511,14 +822,11 @@
       if(!currentChatId) return;
       if(confirm('¿Finalizar esta conversación?')) {
         socket.emit('finish', { chatId: currentChatId });
-        
-        // Reset UI
         activeChat.style.display = 'none';
         emptyState.style.display = 'flex';
         currentChatId = null;
       }
     });
-
   </script>
 </body>
 </html>
