@@ -1497,10 +1497,28 @@ async function handleText({ chatId, text, channel = "wa" }) {
         chosen = top[n - 1].name;
       } else {
         const q = bodyRaw.trim().toLowerCase();
-        chosen =
-          top.find((c) => c.name.toLowerCase() === q)?.name ||
-          opts.find((c) => c.name.toLowerCase() === q)?.name ||
-          null;
+        // 1. Exacto
+        chosen = top.find((c) => c.name.toLowerCase() === q)?.name ||
+          opts.find((c) => c.name.toLowerCase() === q)?.name || null;
+        // 2. Parcial: el input contiene el nombre o viceversa
+        if (!chosen) {
+          chosen = opts.find((c) => c.name.toLowerCase().includes(q) || q.includes(c.name.toLowerCase()))?.name || null;
+        }
+        // 3. Fuzzy: similitud por caracteres comunes
+        if (!chosen && q.length >= 3) {
+          let bestCity = null, bestScore = 0;
+          for (const c of opts) {
+            const cn = c.name.toLowerCase();
+            let matches = 0, ci = 0;
+            for (let qi = 0; qi < q.length && ci < cn.length; qi++) {
+              if (q[qi] === cn[ci]) { matches++; ci++; }
+              else if (ci + 1 < cn.length && q[qi] === cn[ci + 1]) { matches++; ci += 2; }
+            }
+            const score = matches / Math.max(q.length, cn.length);
+            if (score > bestScore) { bestScore = score; bestCity = c.name; }
+          }
+          if (bestScore >= 0.6) chosen = bestCity;
+        }
       }
 
       if (!chosen) {
