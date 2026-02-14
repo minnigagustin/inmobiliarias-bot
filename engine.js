@@ -1586,8 +1586,11 @@ async function handleText({ chatId, text, channel = "wa" }) {
       const filtered = resp.results.slice(0, 5);
 
       if (!filtered.length) {
-        // Sin resultados exactos: buscar sugerencias sin filtro de presupuesto
+        // Sin resultados exactos: buscar sugerencias ampliando filtros
         let suggestions = [];
+        let sugLevel = 0;
+
+        // 1. Mismo tipo+op+ciudad, sin presupuesto
         let sugResp = await searchProperties({
           opText: s.data.prop.op,
           tipoText: s.data.prop.tipo,
@@ -1596,8 +1599,9 @@ async function handleText({ chatId, text, channel = "wa" }) {
           page: 1,
         });
         suggestions = sugResp.results.slice(0, 5);
+        if (suggestions.length) sugLevel = 1;
 
-        // Si tampoco hay en esa ciudad, buscar sin ciudad
+        // 2. Mismo tipo+op, sin ciudad ni presupuesto
         if (!suggestions.length && s.data.prop.city) {
           sugResp = await searchProperties({
             opText: s.data.prop.op,
@@ -1607,6 +1611,30 @@ async function handleText({ chatId, text, channel = "wa" }) {
             page: 1,
           });
           suggestions = sugResp.results.slice(0, 5);
+          if (suggestions.length) sugLevel = 2;
+        }
+
+        // 3. Solo operación, sin tipo ni ciudad ni presupuesto
+        if (!suggestions.length) {
+          sugResp = await searchProperties({
+            opText: s.data.prop.op,
+            tipoText: null,
+            cityText: null,
+            perPage: 10,
+            page: 1,
+          });
+          suggestions = sugResp.results.slice(0, 5);
+          if (suggestions.length) sugLevel = 3;
+        }
+
+        // 4. Sin ningún filtro: mostrar las más recientes
+        if (!suggestions.length) {
+          sugResp = await searchProperties({
+            perPage: 10,
+            page: 1,
+          });
+          suggestions = sugResp.results.slice(0, 5);
+          if (suggestions.length) sugLevel = 4;
         }
 
         if (suggestions.length) {
@@ -1621,9 +1649,16 @@ async function handleText({ chatId, text, channel = "wa" }) {
             })),
           };
 
-          replies.push(
-            "No encontré opciones exactas con tu presupuesto, pero te dejo algunas *sugerencias* que podrían interesarte:"
-          );
+          // Mensaje adaptado según qué tan amplia fue la búsqueda
+          let sugMsg;
+          if (sugLevel <= 2) {
+            sugMsg = "No encontré opciones exactas con tu presupuesto, pero te dejo algunas *sugerencias* similares que podrían interesarte:";
+          } else if (sugLevel === 3) {
+            sugMsg = "No encontré opciones exactas con esos filtros. Te muestro otras propiedades disponibles para *" + s.data.prop.op + "* que podrían interesarte:";
+          } else {
+            sugMsg = "No tenemos opciones de *" + s.data.prop.op + "* en este momento, pero te muestro otras propiedades disponibles que podrían interesarte:";
+          }
+          replies.push(sugMsg);
 
           if (channel !== "web") {
             for (const p of suggestions) replies.push(fmtPropCard(p));
@@ -1765,8 +1800,11 @@ async function handleText({ chatId, text, channel = "wa" }) {
       const filtered = resp.results.slice(0, 5);
 
       if (!filtered.length) {
-        // Sin resultados exactos: buscar sugerencias sin filtro de presupuesto
+        // Sin resultados exactos: buscar sugerencias ampliando filtros
         let suggestions = [];
+        let sugLevel = 0;
+
+        // 1. Mismo tipo+op+ciudad, sin presupuesto
         let sugResp = await searchProperties({
           opText: s.data.prop.op,
           tipoText: s.data.prop.tipo,
@@ -1775,8 +1813,9 @@ async function handleText({ chatId, text, channel = "wa" }) {
           page: 1,
         });
         suggestions = sugResp.results.slice(0, 5);
+        if (suggestions.length) sugLevel = 1;
 
-        // Si tampoco hay en esa ciudad, buscar sin ciudad
+        // 2. Mismo tipo+op, sin ciudad ni presupuesto
         if (!suggestions.length && s.data.prop.city) {
           sugResp = await searchProperties({
             opText: s.data.prop.op,
@@ -1786,6 +1825,30 @@ async function handleText({ chatId, text, channel = "wa" }) {
             page: 1,
           });
           suggestions = sugResp.results.slice(0, 5);
+          if (suggestions.length) sugLevel = 2;
+        }
+
+        // 3. Solo operación, sin tipo ni ciudad ni presupuesto
+        if (!suggestions.length) {
+          sugResp = await searchProperties({
+            opText: s.data.prop.op,
+            tipoText: null,
+            cityText: null,
+            perPage: 10,
+            page: 1,
+          });
+          suggestions = sugResp.results.slice(0, 5);
+          if (suggestions.length) sugLevel = 3;
+        }
+
+        // 4. Sin ningún filtro: mostrar las más recientes
+        if (!suggestions.length) {
+          sugResp = await searchProperties({
+            perPage: 10,
+            page: 1,
+          });
+          suggestions = sugResp.results.slice(0, 5);
+          if (suggestions.length) sugLevel = 4;
         }
 
         if (suggestions.length) {
@@ -1800,9 +1863,16 @@ async function handleText({ chatId, text, channel = "wa" }) {
             })),
           };
 
-          replies.push(
-            "No encontré opciones exactas con tu presupuesto, pero te dejo algunas *sugerencias* que podrían interesarte:"
-          );
+          // Mensaje adaptado según qué tan amplia fue la búsqueda
+          let sugMsg;
+          if (sugLevel <= 2) {
+            sugMsg = "No encontré opciones exactas con tu presupuesto, pero te dejo algunas *sugerencias* similares que podrían interesarte:";
+          } else if (sugLevel === 3) {
+            sugMsg = "No encontré opciones exactas con esos filtros. Te muestro otras propiedades disponibles para *" + s.data.prop.op + "* que podrían interesarte:";
+          } else {
+            sugMsg = "No tenemos opciones de *" + s.data.prop.op + "* en este momento, pero te muestro otras propiedades disponibles que podrían interesarte:";
+          }
+          replies.push(sugMsg);
 
           if (channel !== "web") {
             for (const p of suggestions) replies.push(fmtPropCard(p));
