@@ -153,17 +153,35 @@ function getFeaturedImage(p) {
   return fm?.source_url || fm?.media_details?.sizes?.medium?.source_url || null;
 }
 
+function extractTaxTerms(p) {
+  // _embedded['wp:term'] es un array de arrays (una por taxonomía)
+  const termGroups = p?._embedded?.["wp:term"] || [];
+  const all = termGroups.flat();
+  const opTerm = all.find(t => t.taxonomy === TAX_OP);
+  const tipoTerm = all.find(t => t.taxonomy === TAX_TIPO);
+  const cityTerm = all.find(t => t.taxonomy === TAX_CITY);
+  return {
+    opName: opTerm?.name || null,
+    tipoName: tipoTerm?.name || null,
+    cityName: cityTerm?.name || null,
+  };
+}
+
 function mapProperty(p) {
   const { price, currency, prefix } = extractPrice(p);
+  const { opName, tipoName, cityName } = extractTaxTerms(p);
   return {
     id: p.id,
     title: p?.title?.rendered ? stripHtml(p.title.rendered) : "Propiedad",
     link: p.link,
     excerpt: p?.excerpt?.rendered ? stripHtml(p.excerpt.rendered) : "",
-    image: getFeaturedImage(p), // ✅ NUEVO
+    image: getFeaturedImage(p),
     price,
     currency: currency || "ARS",
     price_prefix: prefix,
+    opName,
+    tipoName,
+    cityName,
     raw: p,
   };
 }

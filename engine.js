@@ -577,8 +577,11 @@ Por email, acceso web o copia impresa.
 function fmtPropCard(p) {
   const imgLine = p.image ? `📷 Foto: ${p.image}\n` : "";
   const desc = p.excerpt ? `📝 ${p.excerpt}\n` : "";
+  const tags = [p.opName, p.tipoName].filter(Boolean).join(" · ");
+  const tagLine = tags ? `🏷️ ${tags}\n` : "";
   return (
     `🏠 *${p.title}*\n` +
+    tagLine +
     `💰 *${fmtAmount(p.price, p.currency)}*\n` +
     imgLine +
     desc +
@@ -1639,14 +1642,21 @@ async function handleText({ chatId, text, channel = "wa" }) {
 
         if (suggestions.length) {
           const sugUi = {
-            cards: suggestions.map((p) => ({
-              id: p.id,
-              title: p.title,
-              priceText: fmtAmount(p.price, p.currency),
-              excerpt: p.excerpt || "",
-              image: p.image || null,
-              link: p.link,
-            })),
+            cards: suggestions.map((p) => {
+              // Armar etiqueta con operación y tipo si están disponibles
+              const tags = [p.opName, p.tipoName].filter(Boolean).join(" · ");
+              const priceWithTag = tags
+                ? `${tags} — ${fmtAmount(p.price, p.currency)}`
+                : fmtAmount(p.price, p.currency);
+              return {
+                id: p.id,
+                title: p.title,
+                priceText: priceWithTag,
+                excerpt: p.excerpt || "",
+                image: p.image || null,
+                link: p.link,
+              };
+            }),
           };
 
           // Mensaje adaptado según qué tan amplia fue la búsqueda
@@ -1853,14 +1863,21 @@ async function handleText({ chatId, text, channel = "wa" }) {
 
         if (suggestions.length) {
           const sugUi = {
-            cards: suggestions.map((p) => ({
-              id: p.id,
-              title: p.title,
-              priceText: fmtAmount(p.price, p.currency),
-              excerpt: p.excerpt || "",
-              image: p.image || null,
-              link: p.link,
-            })),
+            cards: suggestions.map((p) => {
+              // Armar etiqueta con operación y tipo si están disponibles
+              const tags = [p.opName, p.tipoName].filter(Boolean).join(" · ");
+              const priceWithTag = tags
+                ? `${tags} — ${fmtAmount(p.price, p.currency)}`
+                : fmtAmount(p.price, p.currency);
+              return {
+                id: p.id,
+                title: p.title,
+                priceText: priceWithTag,
+                excerpt: p.excerpt || "",
+                image: p.image || null,
+                link: p.link,
+              };
+            }),
           };
 
           // Mensaje adaptado según qué tan amplia fue la búsqueda
