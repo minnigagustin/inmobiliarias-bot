@@ -1586,9 +1586,61 @@ async function handleText({ chatId, text, channel = "wa" }) {
       const filtered = resp.results.slice(0, 5);
 
       if (!filtered.length) {
+        // Sin resultados exactos: buscar sugerencias sin filtro de presupuesto
+        let suggestions = [];
+        let sugResp = await searchProperties({
+          opText: s.data.prop.op,
+          tipoText: s.data.prop.tipo,
+          cityText: s.data.prop.city,
+          perPage: 10,
+          page: 1,
+        });
+        suggestions = sugResp.results.slice(0, 5);
+
+        // Si tampoco hay en esa ciudad, buscar sin ciudad
+        if (!suggestions.length && s.data.prop.city) {
+          sugResp = await searchProperties({
+            opText: s.data.prop.op,
+            tipoText: s.data.prop.tipo,
+            cityText: null,
+            perPage: 10,
+            page: 1,
+          });
+          suggestions = sugResp.results.slice(0, 5);
+        }
+
+        if (suggestions.length) {
+          const sugUi = {
+            cards: suggestions.map((p) => ({
+              id: p.id,
+              title: p.title,
+              priceText: fmtAmount(p.price, p.currency),
+              excerpt: p.excerpt || "",
+              image: p.image || null,
+              link: p.link,
+            })),
+          };
+
+          replies.push(
+            "No encontré opciones exactas con tu presupuesto, pero te dejo algunas *sugerencias* que podrían interesarte:"
+          );
+
+          if (channel !== "web") {
+            for (const p of suggestions) replies.push(fmtPropCard(p));
+          }
+
+          replies.push(
+            "¿Querés que un asesor te contacte para más opciones? (sí/no)"
+          );
+
+          s.step = "prop_buscar_derivar";
+          return { replies, notifyAgent, session: s, ui: sugUi };
+        }
+
+        // Sin sugerencias tampoco
         replies.push(
-          "No encontré coincidencias con esos filtros en este momento. " +
-            "¿Querés ampliar presupuesto / cambiar ciudad / o hablar con un asesor? (sí/no)"
+          "No encontré propiedades con esos filtros en este momento. " +
+            "¿Querés hablar con un asesor para que te ayude? (sí/no)"
         );
         s.step = "prop_buscar_derivar";
         break;
@@ -1713,9 +1765,61 @@ async function handleText({ chatId, text, channel = "wa" }) {
       const filtered = resp.results.slice(0, 5);
 
       if (!filtered.length) {
+        // Sin resultados exactos: buscar sugerencias sin filtro de presupuesto
+        let suggestions = [];
+        let sugResp = await searchProperties({
+          opText: s.data.prop.op,
+          tipoText: s.data.prop.tipo,
+          cityText: s.data.prop.city,
+          perPage: 10,
+          page: 1,
+        });
+        suggestions = sugResp.results.slice(0, 5);
+
+        // Si tampoco hay en esa ciudad, buscar sin ciudad
+        if (!suggestions.length && s.data.prop.city) {
+          sugResp = await searchProperties({
+            opText: s.data.prop.op,
+            tipoText: s.data.prop.tipo,
+            cityText: null,
+            perPage: 10,
+            page: 1,
+          });
+          suggestions = sugResp.results.slice(0, 5);
+        }
+
+        if (suggestions.length) {
+          const sugUi = {
+            cards: suggestions.map((p) => ({
+              id: p.id,
+              title: p.title,
+              priceText: fmtAmount(p.price, p.currency),
+              excerpt: p.excerpt || "",
+              image: p.image || null,
+              link: p.link,
+            })),
+          };
+
+          replies.push(
+            "No encontré opciones exactas con tu presupuesto, pero te dejo algunas *sugerencias* que podrían interesarte:"
+          );
+
+          if (channel !== "web") {
+            for (const p of suggestions) replies.push(fmtPropCard(p));
+          }
+
+          replies.push(
+            "¿Querés que un asesor te contacte para más opciones? (sí/no)"
+          );
+
+          s.step = "prop_buscar_derivar";
+          return { replies, notifyAgent, session: s, ui: sugUi };
+        }
+
+        // Sin sugerencias tampoco
         replies.push(
-          "No encontré coincidencias con esos filtros en este momento. " +
-            "¿Querés ampliar presupuesto / cambiar zona / o hablar con un asesor? (sí/no)"
+          "No encontré propiedades con esos filtros en este momento. " +
+            "¿Querés hablar con un asesor para que te ayude? (sí/no)"
         );
         s.step = "prop_buscar_derivar";
         break;

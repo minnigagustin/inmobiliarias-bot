@@ -898,8 +898,11 @@
           <span class="q-id">${rec.chatId.slice(-6)}</span>
         </div>
         <div class="q-reason">${getReasonText(rec.payload)}</div>
-        <button class="btn-take" onclick="takeChat('${rec.chatId}')">Tomar Caso</button>
+        <button class="btn-take">Tomar Caso</button>
       `;
+      div.querySelector('.btn-take').addEventListener('click', () => {
+        takeChat(rec.chatId);
+      });
       queueList.appendChild(div);
     }
 
@@ -967,10 +970,11 @@
       setTimeout(() => { thread.scrollTop = thread.scrollHeight; }, 50);
     }
 
-    window.takeChat = (chatId) => {
+    function takeChat(chatId) {
+      console.log('takeChat llamado:', chatId);
       socket.emit('assign', { chatId });
-      closeSidebar(); // Close sidebar on mobile after taking chat
-    };
+      closeSidebar();
+    }
 
     const sendMsg = () => {
       const text = input.value.trim();
