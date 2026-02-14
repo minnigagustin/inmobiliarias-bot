@@ -1,7 +1,21 @@
 // public/app.js
-/* Chat web BR-Group: soporte de handoff humano con banner y “finalizar” */
+/* Chat web BR-Group: soporte de handoff humano con banner y "finalizar" */
+
+// Identidad persistente del cliente
+function getChatId() {
+  let id = localStorage.getItem("br_chat_id");
+  if (!id) {
+    id = "web-" + crypto.randomUUID();
+    localStorage.setItem("br_chat_id", id);
+  }
+  return id;
+}
+const MY_CHAT_ID = getChatId();
 
 const socket = io();
+socket.on("connect", () => {
+  socket.emit("register_chat", { chatId: MY_CHAT_ID });
+});
 
 const APP = window.APP_CONFIG || {};
 const COMPANY_NAME = APP.companyName || "Asistente";
@@ -287,6 +301,28 @@ socket.on("agent_assigned", ({ agent }) => {
   stopTyping();
   disableAllChoiceButtons();
   showHumanBanner(agent);
+});
+
+// Restaurar estado tras recarga de página
+socket.on("restore_state", ({ transcript, humanMode: hm, agentName }) => {
+  stopTyping();
+  messagesEl.innerHTML = ""; // limpiar si había algo
+  if (Array.isArray(transcript)) {
+    transcript.forEach((msg) => {
+      if (msg.type === "image" && msg.url) {
+        addImage(msg.url, msg.who === "user" ? "user" : "bot");
+      } else if (msg.text) {
+        const who = msg.who === "user" ? "user" : msg.who === "system" ? "system" : "bot";
+        addMessage(msg.text, who);
+      }
+    });
+  }
+  if (hm) {
+    humanMode = true;
+    disableAllChoiceButtons();
+    showHumanBanner(agentName);
+  }
+  scrollToBottom();
 });
 
 // Handoff: el server avisa que terminó el chat con agente

@@ -780,12 +780,11 @@ adminIo.on("connection", async (socket) => {
     }
 
     // 11. Avisar al Cliente Web (si está conectado por web)
-    if (io.sockets.sockets.has(chatId)) {
-      io.to(chatId).emit("system_message", {
-        text: `👤 ${agentName} tomó tu caso.`,
-      });
-      io.to(chatId).emit("agent_assigned", { agent: agentName });
-    }
+    // io.to(chatId) funciona tanto para socket.id como para rooms custom
+    io.to(chatId).emit("system_message", {
+      text: `👤 ${agentName} tomó tu caso.`,
+    });
+    io.to(chatId).emit("agent_assigned", { agent: agentName });
 
     // 12. Registrar evento en el historial del chat
     const ts = Date.now();
@@ -889,42 +888,68 @@ adminIo.on("connection", async (socket) => {
 io.on("connection", async (socket) => {
   console.log("🟢 Cliente WEB conectado", socket.id);
 
-  const { replies, session } = await handleText({
-    chatId: socket.id,
-    text: "menu",
-    channel: "web",
-  });
-  replies.forEach((t) => {
-    socket.emit("bot_message", { text: t });
-    pushTranscript(socket.id, {
-      who: "bot",
-      text: t,
-      ts: Date.now(),
-      type: "text",
+  // El chatId persistente se asigna cuando el cliente envía register_chat
+  socket.chatId = socket.id; // default hasta register
+
+  socket.on("register_chat", async ({ chatId }) => {
+    if (!chatId || socket._registered) return;
+    socket._registered = true;
+    socket.chatId = chatId;
+    socket.join(chatId);
+
+    // Verificar si ya tiene conversación activa
+    const inHuman = humanChats.has(chatId);
+    const hasConvo = conversations.has(chatId) || inHuman;
+
+    if (hasConvo) {
+      // Restaurar: enviar transcript y estado
+      let transcript = [];
+      try { transcript = await DB.getHistory(chatId); } catch (e) { /* */ }
+      if (transcript.length === 0 && conversations.has(chatId))
+        transcript = conversations.get(chatId);
+
+      socket.emit("restore_state", {
+        transcript,
+        humanMode: inHuman,
+        agentName: inHuman ? humanChats.get(chatId).agentName : null,
+      });
+      return; // no enviar menú de nuevo
+    }
+
+    // Primera vez: enviar menú inicial
+    const { replies, session } = await handleText({
+      chatId,
+      text: "menu",
+      channel: "web",
     });
+    replies.forEach((t) => {
+      socket.emit("bot_message", { text: t });
+      pushTranscript(chatId, { who: "bot", text: t, ts: Date.now(), type: "text" });
+    });
+    const btns = buildButtonsForStep(session);
+    if (btns?.length)
+      socket.emit("bot_message", { text: "Opciones:", buttons: btns });
   });
-  const btns = buildButtonsForStep(session);
-  if (btns?.length)
-    socket.emit("bot_message", { text: "Opciones:", buttons: btns });
 
   socket.on("user_message", async (msg) => {
+    const cid = socket.chatId;
     const text = msg && msg.text ? String(msg.text) : "";
     const ts = Date.now();
 
     // Registrar mensaje del usuario
-    pushTranscript(socket.id, { who: "user", text, ts, type: "text" });
-    fanoutToAgentIfNeeded(socket.id, { who: "user", text, ts, type: "text" });
+    pushTranscript(cid, { who: "user", text, ts, type: "text" });
+    fanoutToAgentIfNeeded(cid, { who: "user", text, ts, type: "text" });
 
     // Actualizar lastActivity
-    const hcUser = humanChats.get(socket.id);
+    const hcUser = humanChats.get(cid);
     if (hcUser) hcUser.lastActivity = ts;
 
     // Si ya lo atiende un humano, ignorar al bot
-    if (humanChats.has(socket.id)) return;
+    if (humanChats.has(cid)) return;
 
     // Procesar con el Engine
     const { replies, notifyAgent, session, aiSignal, ui } = await handleText({
-      chatId: socket.id,
+      chatId: cid,
       text,
       channel: "web",
     });
@@ -940,13 +965,13 @@ io.on("connection", async (socket) => {
     // 2. Enviamos los mensajes de texto introductorios
     replies.forEach((t) => {
       socket.emit("bot_message", { text: t });
-      pushTranscript(socket.id, {
+      pushTranscript(cid, {
         who: "bot",
         text: t,
         ts: Date.now(),
         type: "text",
       });
-      fanoutToAgentIfNeeded(socket.id, {
+      fanoutToAgentIfNeeded(cid, {
         who: "bot",
         text: t,
         ts: Date.now(),
@@ -957,7 +982,7 @@ io.on("connection", async (socket) => {
     // 3. Enviamos las Tarjetas (si existen)
     if (ui?.cards?.length) {
       socket.emit("bot_message", { type: "property_cards", cards: ui.cards });
-      pushTranscript(socket.id, {
+      pushTranscript(cid, {
         who: "bot",
         text: "[Cards]",
         ts: Date.now(),
@@ -970,13 +995,13 @@ io.on("connection", async (socket) => {
       setTimeout(() => {
         // Enviar pregunta
         socket.emit("bot_message", { text: finalQuestion });
-        pushTranscript(socket.id, {
+        pushTranscript(cid, {
           who: "bot",
           text: finalQuestion,
           ts: Date.now(),
           type: "text",
         });
-        fanoutToAgentIfNeeded(socket.id, {
+        fanoutToAgentIfNeeded(cid, {
           who: "bot",
           text: finalQuestion,
           ts: Date.now(),
@@ -987,7 +1012,7 @@ io.on("connection", async (socket) => {
         const b = buildButtonsForStep(session);
         if (b?.length) {
           socket.emit("bot_message", { text: "Opciones:", buttons: b });
-          pushTranscript(socket.id, {
+          pushTranscript(cid, {
             who: "bot",
             text: "Opciones...",
             ts: Date.now(),
@@ -1000,7 +1025,7 @@ io.on("connection", async (socket) => {
       const b = buildButtonsForStep(session);
       if (b?.length) {
         socket.emit("bot_message", { text: "Opciones:", buttons: b });
-        pushTranscript(socket.id, {
+        pushTranscript(cid, {
           who: "bot",
           text: "Opciones...",
           ts: Date.now(),
@@ -1012,20 +1037,20 @@ io.on("connection", async (socket) => {
 
     // Manejo de IA (Timeouts)
     if (aiSignal?.mode === "on" || aiSignal?.mode === "extend") {
-      if (aiSignal.until) scheduleAIModeTimeout(socket.id, aiSignal.until);
+      if (aiSignal.until) scheduleAIModeTimeout(cid, aiSignal.until);
     }
-    if (aiSignal?.mode === "off") clearAIModeTimer(socket.id);
+    if (aiSignal?.mode === "off") clearAIModeTimer(cid);
 
     // Notificación a Agentes (Cola de espera)
     if (notifyAgent) {
       const rec = {
-        chatId: socket.id,
+        chatId: cid,
         since: Date.now(),
         payload: notifyAgent,
       };
       addToQueue(rec, adminIo);
       socket.emit("system_message", { text: "📣 Un agente fue notificado." });
-      pushTranscript(socket.id, {
+      pushTranscript(cid, {
         who: "system",
         text: "Encolado",
         ts: Date.now(),
@@ -1034,6 +1059,7 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("user_image", async (payload) => {
+    const cid = socket.chatId;
     try {
       const { name, type, data } = payload || {};
       const base64 = String(data || "").split(",")[1];
@@ -1047,64 +1073,65 @@ io.on("connection", async (socket) => {
       const url = `/uploads/${fname}`;
       const ts = Date.now();
 
-      pushTranscript(socket.id, { who: "user", url, type: "image", ts });
-      fanoutToAgentIfNeeded(socket.id, { who: "user", url, type: "image", ts });
+      pushTranscript(cid, { who: "user", url, type: "image", ts });
+      fanoutToAgentIfNeeded(cid, { who: "user", url, type: "image", ts });
 
       // Actualizar lastActivity
-      const hcImg = humanChats.get(socket.id);
+      const hcImg = humanChats.get(cid);
       if (hcImg) hcImg.lastActivity = ts;
 
-      if (humanChats.has(socket.id)) {
+      if (humanChats.has(cid)) {
         socket.emit("system_message", { text: "📸 Imagen enviada al agente." });
         return;
       }
 
       const { replies } = await handleImage({
-        chatId: socket.id,
+        chatId: cid,
         file: { url, type: type || "image/*", name: name || fname },
       });
       replies.forEach((t) => {
         socket.emit("bot_message", { text: t });
-        pushTranscript(socket.id, { who: "bot", text: t, ts: Date.now() });
+        pushTranscript(cid, { who: "bot", text: t, ts: Date.now() });
       });
     } catch (e) {
       console.error(e);
     }
   });
 
-  socket.on("user_finish", () => endHumanChat(socket.id, "user", io, adminIo));
+  socket.on("user_finish", () => endHumanChat(socket.chatId, "user", io, adminIo));
 
   socket.on("rate_submit", async ({ stars, skipped }) => {
+    const cid = socket.chatId;
     const txt = skipped ? "Rating omitido" : `Rating: ${stars} estrellas`;
 
     // 1. Guardar en DB
     if (!skipped && stars) {
-      await DB.saveRating(socket.id, stars);
+      await DB.saveRating(cid, stars);
     }
 
     // 2. Registrar en transcript
-    pushTranscript(socket.id, { who: "system", text: txt, ts: Date.now() });
+    pushTranscript(cid, { who: "system", text: txt, ts: Date.now() });
 
     // 3. Agradecer
-    io.to(socket.id).emit("system_message", {
+    io.to(cid).emit("system_message", {
       text: "¡Gracias por tu opinión!",
     });
 
     // 🔥 CAMBIO: En lugar de ir al menú directo, preguntamos
-    const s = getSession(socket.id);
+    const s = getSession(cid);
     s.step = "rate_followup"; // Nuevo estado temporal
 
     const followUpMsg = "¿Deseás realizar alguna otra consulta? (Sí / No)";
 
-    io.to(socket.id).emit("bot_message", {
+    io.to(cid).emit("bot_message", {
       text: followUpMsg,
       buttons: [
         { label: "Sí", value: "sí" },
         { label: "No", value: "no" },
-      ], // Opcional: botones rápidos
+      ],
     });
 
-    pushTranscript(socket.id, {
+    pushTranscript(cid, {
       who: "bot",
       text: followUpMsg,
       ts: Date.now(),
@@ -1112,18 +1139,10 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("disconnect", () => {
-    removeFromQueue(socket.id, adminIo);
-    clearAIModeTimer(socket.id);
-    if (humanChats.has(socket.id)) {
-      const info = humanChats.get(socket.id);
-      humanChats.delete(socket.id);
-      if (info.agentId) {
-        adminIo.to(info.agentId).emit("chat_ended", {
-          chatId: socket.id,
-          reason: "user_disconnect",
-        });
-      }
-    }
+    // No borrar humanChats en disconnect del cliente web
+    // porque puede reconectar (recarga de página)
+    // Solo limpiar de la cola si estaba pendiente
+    removeFromQueue(socket.chatId, adminIo);
   });
 });
 
