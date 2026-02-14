@@ -308,12 +308,27 @@ socket.on("restore_state", ({ transcript, humanMode: hm, agentName }) => {
   stopTyping();
   messagesEl.innerHTML = ""; // limpiar si había algo
   if (Array.isArray(transcript)) {
-    transcript.forEach((msg) => {
+    // Encontrar el índice del último mensaje con botones
+    let lastBtnIdx = -1;
+    transcript.forEach((msg, i) => {
+      if (msg.buttons && msg.buttons.length) lastBtnIdx = i;
+    });
+
+    transcript.forEach((msg, i) => {
       if (msg.type === "image" && msg.url) {
         addImage(msg.url, msg.who === "user" ? "user" : "bot");
       } else if (msg.text) {
         const who = msg.who === "user" ? "user" : msg.who === "system" ? "system" : "bot";
-        addMessage(msg.text, who);
+        // No mostrar "Opciones:" como texto si tiene botones activos
+        if (msg.buttons && msg.buttons.length && i === lastBtnIdx) {
+          if (msg.text !== "Opciones:") addMessage(msg.text, who);
+          addButtons(msg.buttons);
+        } else if (msg.buttons && msg.buttons.length) {
+          // Botones anteriores: solo mostrar texto, sin botones interactivos
+          addMessage(msg.text, who);
+        } else {
+          addMessage(msg.text, who);
+        }
       }
     });
   }

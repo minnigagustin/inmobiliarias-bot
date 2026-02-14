@@ -927,8 +927,10 @@ io.on("connection", async (socket) => {
       pushTranscript(chatId, { who: "bot", text: t, ts: Date.now(), type: "text" });
     });
     const btns = buildButtonsForStep(session);
-    if (btns?.length)
+    if (btns?.length) {
       socket.emit("bot_message", { text: "Opciones:", buttons: btns });
+      pushTranscript(chatId, { who: "bot", text: "Opciones:", buttons: btns, ts: Date.now(), type: "text" });
+    }
   });
 
   socket.on("user_message", async (msg) => {
@@ -1014,7 +1016,8 @@ io.on("connection", async (socket) => {
           socket.emit("bot_message", { text: "Opciones:", buttons: b });
           pushTranscript(cid, {
             who: "bot",
-            text: "Opciones...",
+            text: "Opciones:",
+            buttons: b,
             ts: Date.now(),
             type: "text",
           });
@@ -1027,7 +1030,8 @@ io.on("connection", async (socket) => {
         socket.emit("bot_message", { text: "Opciones:", buttons: b });
         pushTranscript(cid, {
           who: "bot",
-          text: "Opciones...",
+          text: "Opciones:",
+          buttons: b,
           ts: Date.now(),
           type: "text",
         });
@@ -1123,17 +1127,19 @@ io.on("connection", async (socket) => {
 
     const followUpMsg = "¿Deseás realizar alguna otra consulta? (Sí / No)";
 
+    const followBtns = [
+      { label: "Sí", value: "sí" },
+      { label: "No", value: "no" },
+    ];
     io.to(cid).emit("bot_message", {
       text: followUpMsg,
-      buttons: [
-        { label: "Sí", value: "sí" },
-        { label: "No", value: "no" },
-      ],
+      buttons: followBtns,
     });
 
     pushTranscript(cid, {
       who: "bot",
       text: followUpMsg,
+      buttons: followBtns,
       ts: Date.now(),
     });
   });

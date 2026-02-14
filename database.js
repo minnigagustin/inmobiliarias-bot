@@ -27,8 +27,11 @@ db.serialize(() => {
     text TEXT,
     url TEXT,
     type TEXT,
-    timestamp INTEGER
+    timestamp INTEGER,
+    buttons TEXT
   )`);
+  // Migración: agregar columna buttons si no existe
+  db.run(`ALTER TABLE messages ADD COLUMN buttons TEXT`, () => {});
 
   // 🔥 NUEVA TABLA: TICKETS (Historial de atención)
   db.run(`CREATE TABLE IF NOT EXISTS tickets (
@@ -239,7 +242,7 @@ module.exports = {
   },
   saveMessage: (chatId, msg) => {
     db.run(
-      "INSERT INTO messages (chat_id, who, text, url, type, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO messages (chat_id, who, text, url, type, timestamp, buttons) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [
         chatId,
         msg.who,
@@ -247,6 +250,7 @@ module.exports = {
         msg.url || null,
         msg.type || "text",
         msg.ts || Date.now(),
+        msg.buttons ? JSON.stringify(msg.buttons) : null,
       ]
     );
   },
@@ -257,7 +261,13 @@ module.exports = {
         [chatId],
         (err, rows) => {
           if (err) reject(err);
-          else resolve(rows);
+          else {
+            // Parsear buttons de JSON si existe
+            resolve((rows || []).map(r => {
+              if (r.buttons) try { r.buttons = JSON.parse(r.buttons); } catch(e) {}
+              return r;
+            }));
+          }
         }
       );
     });
