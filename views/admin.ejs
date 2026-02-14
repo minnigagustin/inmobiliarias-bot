@@ -165,6 +165,149 @@
       opacity: 0.3;
     }
 
+    /* Active Chats Section */
+    .active-section {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .active-list {
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .active-accent {
+      background: rgba(34, 197, 94, 0.12) !important;
+      color: var(--success) !important;
+    }
+
+    .active-chat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .active-chat-card:hover {
+      border-color: var(--accent);
+      background: rgba(212, 168, 83, 0.03);
+    }
+
+    .active-chat-card.selected {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .active-chat-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    .active-chat-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .active-chat-id {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    .active-chat-reason {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Toggle Switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      margin-top: 10px;
+    }
+
+    .toggle-row label {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      left: 2px;
+      top: 2px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(16px);
+      background: var(--accent);
+    }
+
+    .chat-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chat-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
     /* Queue Card */
     .queue-card {
       background: var(--bg-card);
@@ -778,6 +921,17 @@
       .chat-header {
         padding: 10px 12px 10px 60px;
         gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .chat-header-actions {
+        gap: 8px;
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .chat-toggle-row label {
+        font-size: 0.65rem;
       }
 
       .chat-user-info {
@@ -877,6 +1031,22 @@
             </div>
           </div>
         </div>
+        <div class="toggle-row">
+          <span class="toggle">
+            <input type="checkbox" id="globalTimeoutToggle">
+            <span class="toggle-slider"></span>
+          </span>
+          <label for="globalTimeoutToggle">Pausar auto-cierre global</label>
+        </div>
+      </div>
+
+      <!-- Chats Activos -->
+      <div class="active-section" id="active-section">
+        <div class="queue-header">
+          <span class="queue-title">Chats Activos</span>
+          <span class="queue-count active-accent" id="active-count">0</span>
+        </div>
+        <div id="active-list" class="active-list"></div>
       </div>
 
       <div class="queue-section">
@@ -923,7 +1093,16 @@
               <span class="chat-label"><span class="status-dot"></span> Chat activo</span>
             </div>
           </div>
-          <button id="finishBtn" class="btn-finish">Finalizar</button>
+          <div class="chat-header-actions">
+            <div class="chat-toggle-row">
+              <span class="toggle">
+                <input type="checkbox" id="chatTimeoutToggle">
+                <span class="toggle-slider"></span>
+              </span>
+              <label for="chatTimeoutToggle">Sin auto-cierre</label>
+            </div>
+            <button id="finishBtn" class="btn-finish">Finalizar</button>
+          </div>
         </div>
 
         <div id="case-details" class="case-info"></div>
@@ -966,10 +1145,13 @@
     sidebarOverlay.addEventListener('click', closeSidebar);
 
     const socket = io('/admin');
+    const activeChatsMap = new Map(); // chatId -> { transcript, payload }
     let currentChatId = null;
 
     const queueList = document.getElementById('queue-list');
     const queueCount = document.getElementById('queue-count');
+    const activeList = document.getElementById('active-list');
+    const activeCountEl = document.getElementById('active-count');
     const emptyState = document.getElementById('empty-state');
     const activeChat = document.getElementById('active-chat');
     const thread = document.getElementById('thread');
@@ -979,6 +1161,7 @@
 
     socket.on('connect_error', () => window.location.href = '/login');
 
+    /* ---- Cola de espera ---- */
     socket.on('queue_snapshot', (list) => {
       updateQueueCount(list.length);
       queueList.innerHTML = '';
@@ -1022,27 +1205,81 @@
       }
     });
 
-    socket.on('assigned', ({ chatId, transcript, payload }) => {
-      emptyState.style.display = 'none';
-      activeChat.style.display = 'flex';
-      currentChatId = chatId;
-      chatTitle.innerText = chatId.slice(-8);
-      renderCaseInfo(payload);
-      thread.innerHTML = '';
-      transcript.forEach(renderMessage);
-      scrollToBottom();
-      input.focus();
+    /* ---- Chats activos: reconexión ---- */
+    socket.on('active_chats', (chats) => {
+      chats.forEach(({ chatId, transcript, payload, noTimeout }) => {
+        activeChatsMap.set(chatId, { transcript: transcript || [], payload, noTimeout: !!noTimeout });
+        renderActiveChatCard(chatId, payload);
+      });
+      updateActiveCount();
+      if (chats.length > 0 && !currentChatId) selectChat(chats[0].chatId);
     });
 
+    /* ---- Asignado nuevo ---- */
+    socket.on('assigned', ({ chatId, transcript, payload }) => {
+      activeChatsMap.set(chatId, { transcript: transcript || [], payload });
+      renderActiveChatCard(chatId, payload);
+      updateActiveCount();
+      selectChat(chatId);
+    });
+
+    /* ---- Chat finalizado (por timeout, user disconnect, etc) ---- */
+    socket.on('chat_ended', ({ chatId, reason }) => {
+      activeChatsMap.delete(chatId);
+      const card = document.getElementById('ac-' + chatId);
+      if (card) { card.style.opacity = '0'; setTimeout(() => card.remove(), 200); }
+      updateActiveCount();
+      if (currentChatId === chatId) {
+        currentChatId = null;
+        const remaining = Array.from(activeChatsMap.keys());
+        if (remaining.length > 0) { selectChat(remaining[0]); }
+        else { activeChat.style.display = 'none'; emptyState.style.display = 'flex'; }
+      }
+    });
+
+    /* ---- Mensajes entrantes ---- */
     socket.on('chat_message', (msg) => {
-      if(msg.chatId === currentChatId) {
+      const data = activeChatsMap.get(msg.chatId);
+      if (data) { data.transcript.push(msg); }
+      if (msg.chatId === currentChatId) {
         renderMessage(msg);
         scrollToBottom();
       }
     });
 
-    function updateQueueCount(n) {
-      queueCount.textContent = n;
+    /* ---- Helpers UI ---- */
+    function updateQueueCount(n) { queueCount.textContent = n; }
+    function updateActiveCount() { activeCountEl.textContent = activeChatsMap.size; }
+
+    function renderActiveChatCard(chatId, payload) {
+      const existing = document.getElementById('ac-' + chatId);
+      if (existing) existing.remove();
+      const div = document.createElement('div');
+      div.className = 'active-chat-card';
+      div.id = 'ac-' + chatId;
+      div.innerHTML = '<span class="active-chat-dot"></span><div class="active-chat-info"><div class="active-chat-id">' + chatId.slice(-8) + '</div><div class="active-chat-reason">' + getReasonText(payload) + '</div></div>';
+      div.addEventListener('click', () => selectChat(chatId));
+      activeList.appendChild(div);
+    }
+
+    function selectChat(chatId) {
+      const data = activeChatsMap.get(chatId);
+      if (!data) return;
+      document.querySelectorAll('.active-chat-card.selected').forEach(el => el.classList.remove('selected'));
+      const card = document.getElementById('ac-' + chatId);
+      if (card) card.classList.add('selected');
+      currentChatId = chatId;
+      emptyState.style.display = 'none';
+      activeChat.style.display = 'flex';
+      chatTitle.innerText = chatId.slice(-8);
+      renderCaseInfo(data.payload);
+      // Sincronizar toggle de timeout
+      document.getElementById('chatTimeoutToggle').checked = !!data.noTimeout;
+      thread.innerHTML = '';
+      (data.transcript || []).forEach(renderMessage);
+      scrollToBottom();
+      input.focus();
+      closeSidebar();
     }
 
     function renderQueueItem(rec) {
@@ -1128,7 +1365,6 @@
     }
 
     function takeChat(chatId) {
-      console.log('takeChat llamado:', chatId);
       socket.emit('assign', { chatId });
       closeSidebar();
     }
@@ -1156,7 +1392,6 @@
           const reader = new FileReader();
           reader.onload = () => {
             const dataUrl = reader.result;
-            // Show in thread as agent message
             const row = document.createElement('div');
             row.className = 'msg-row agent';
             const bubble = document.createElement('div');
@@ -1165,7 +1400,6 @@
             row.appendChild(bubble);
             thread.appendChild(row);
             scrollToBottom();
-            // Send to server
             socket.emit('agent_image', { chatId: currentChatId, name: file.name, type: file.type, data: dataUrl });
           };
           reader.readAsDataURL(file);
@@ -1174,13 +1408,37 @@
       fileInput.value = '';
     });
 
+    // Toggle timeout por chat
+    const chatTimeoutToggle = document.getElementById('chatTimeoutToggle');
+    chatTimeoutToggle.addEventListener('change', () => {
+      if (!currentChatId) return;
+      socket.emit('toggle_timeout', { chatId: currentChatId, noTimeout: chatTimeoutToggle.checked });
+      const data = activeChatsMap.get(currentChatId);
+      if (data) data.noTimeout = chatTimeoutToggle.checked;
+    });
+
+    // Toggle timeout global
+    const globalTimeoutToggle = document.getElementById('globalTimeoutToggle');
+    globalTimeoutToggle.addEventListener('change', () => {
+      socket.emit('toggle_timeout_global', { noTimeout: globalTimeoutToggle.checked });
+      // Actualizar todos los chats locales
+      for (const [, data] of activeChatsMap) data.noTimeout = globalTimeoutToggle.checked;
+      // Sincronizar el toggle del chat actual
+      chatTimeoutToggle.checked = globalTimeoutToggle.checked;
+    });
+
     document.getElementById('finishBtn').addEventListener('click', () => {
       if(!currentChatId) return;
       if(confirm('¿Finalizar esta conversación?')) {
         socket.emit('finish', { chatId: currentChatId });
-        activeChat.style.display = 'none';
-        emptyState.style.display = 'flex';
-        currentChatId = null;
+        // Limpiar de active chats
+        activeChatsMap.delete(currentChatId);
+        const card = document.getElementById('ac-' + currentChatId);
+        if (card) card.remove();
+        updateActiveCount();
+        const remaining = Array.from(activeChatsMap.keys());
+        if (remaining.length > 0) { selectChat(remaining[0]); }
+        else { activeChat.style.display = 'none'; emptyState.style.display = 'flex'; currentChatId = null; }
       }
     });
   </script>

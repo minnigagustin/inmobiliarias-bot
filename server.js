@@ -142,6 +142,7 @@ const pendingChats = new Map();
 const conversations = new Map();
 const humanChats = new Map();
 const aiTimers = new Map();
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
 
 function addToQueue(rec, adminIo) {
   pendingChats.set(rec.chatId, rec);
@@ -540,6 +541,21 @@ app.get("/api/wa-status", requireAuth, requireSuperAdmin, async (req, res) => {
   }
 });
 
+// API: Chats activos (para super-admin)
+app.get("/api/active-chats", requireAuth, requireSuperAdmin, (req, res) => {
+  const chats = [];
+  for (const [chatId, info] of humanChats.entries()) {
+    chats.push({
+      chatId,
+      agentName: info.agentName,
+      agentConnected: !!info.agentId,
+      lastActivity: info.lastActivity,
+      payload: info.payload || {},
+    });
+  }
+  res.json(chats);
+});
+
 /* ====================== SOCKETS - WA STATUS (Super Admin only) ====================== */
 const waStatusIo = io.of("/wa-status");
 waStatusIo.use(wrap(sessionMiddleware));
@@ -591,6 +607,9 @@ bridgeIo.on("connection", (socket) => {
     if (!chatId || !msg) return;
     pushTranscript(chatId, msg);
     fanoutToAgentIfNeeded(chatId, msg);
+    // Actualizar lastActivity si es mensaje de usuario
+    const hcBridge = humanChats.get(chatId);
+    if (hcBridge && msg.who === "user") hcBridge.lastActivity = Date.now();
   });
   // Forward wa_status events to super-admin namespace
   socket.on("wa_status", async (data) => {
@@ -620,7 +639,7 @@ bridgeIo.on("connection", (socket) => {
 
 function fanoutToAgentIfNeeded(chatId, payload) {
   const info = humanChats.get(chatId);
-  if (info)
+  if (info && info.agentId)
     adminIo.to(info.agentId).emit("chat_message", { chatId, ...payload });
 }
 
@@ -632,22 +651,27 @@ function endHumanChat(chatId, who, io, adminIo) {
   const msgUser =
     who === "agent"
       ? "✅ El agente finalizó la conversación."
-      : "✅ Finalizaste la conversación.";
+      : who === "timeout"
+        ? "⏱️ La conversación fue cerrada por inactividad."
+        : "✅ Finalizaste la conversación.";
   io.to(chatId).emit("system_message", { text: msgUser });
   io.to(chatId).emit("agent_finished", {});
-  io.to(chatId).emit("rate_request", { agent: info.agentName || "Agente" });
+
+  if (who !== "timeout") {
+    io.to(chatId).emit("rate_request", { agent: info.agentName || "Agente" });
+    pushTranscript(chatId, { who: "system", text: "Solicitud de calificación.", ts: Date.now() });
+  }
 
   pushTranscript(chatId, {
     who: "system",
-    text: "Solicitud de calificación.",
+    text: who === "timeout" ? "Chat cerrado por inactividad." : "Chat finalizado.",
     ts: Date.now(),
   });
-  adminIo.to(info.agentId).emit("chat_message", {
-    chatId,
-    who: "system",
-    text: "Chat finalizado.",
-    ts: Date.now(),
-  });
+
+  // Notificar al agente con evento dedicado
+  if (info.agentId) {
+    adminIo.to(info.agentId).emit("chat_ended", { chatId, reason: who });
+  }
 
   clearAIModeTimer(chatId);
   reset(chatId);
@@ -664,10 +688,23 @@ adminIo.use((socket, next) => {
   }
 });
 
-adminIo.on("connection", (socket) => {
+adminIo.on("connection", async (socket) => {
   socket.emit("queue_snapshot", Array.from(pendingChats.values()));
 
-  // Dentro de adminIo.on('connection', ...)
+  // Reconectar chats activos de este agente
+  const myUserId = socket.agentUser.userId;
+  const activeChats = [];
+  for (const [chatId, info] of humanChats.entries()) {
+    if (info.agentUserId === myUserId) {
+      info.agentId = socket.id; // actualizar socket efímero
+      let transcript = [];
+      try { transcript = await DB.getHistory(chatId); } catch (e) { /* */ }
+      if (transcript.length === 0 && conversations.has(chatId))
+        transcript = conversations.get(chatId);
+      activeChats.push({ chatId, transcript, payload: info.payload || {}, noTimeout: !!info.noTimeout });
+    }
+  }
+  if (activeChats.length > 0) socket.emit("active_chats", activeChats);
 
   socket.on("assign", async ({ chatId }) => {
     // 1. Obtener datos del agente desde la sesión
@@ -706,7 +743,13 @@ adminIo.on("connection", (socket) => {
     }
 
     // 5. Actualizar estado en memoria (Chat activo)
-    humanChats.set(chatId, { agentId: socket.id, agentName: agentName });
+    humanChats.set(chatId, {
+      agentId: socket.id,
+      agentUserId: agentId,
+      agentName,
+      payload,
+      lastActivity: Date.now(),
+    });
 
     // 6. Apagar el timer de la IA para que no moleste
     clearAIModeTimer(chatId);
@@ -769,6 +812,10 @@ adminIo.on("connection", (socket) => {
         .to(bridgeChats.get(chatId))
         .emit("deliver_to_user", { chatId, text });
     fanoutToAgentIfNeeded(chatId, { who: "agent", text, ts, type: "text" });
+
+    // Actualizar lastActivity
+    const hc = humanChats.get(chatId);
+    if (hc) hc.lastActivity = ts;
   });
 
   // Agente envía imagen al cliente
@@ -790,8 +837,25 @@ adminIo.on("connection", (socket) => {
       if (bridgeChats.has(chatId)) {
         bridgeIo.to(bridgeChats.get(chatId)).emit("deliver_image_to_user", { chatId, url, filePath });
       }
+      // Actualizar lastActivity
+      const hcAi = humanChats.get(chatId);
+      if (hcAi) hcAi.lastActivity = ts;
     } catch (e) {
       console.error("Error agent_image:", e);
+    }
+  });
+
+  // Toggle timeout por chat individual
+  socket.on("toggle_timeout", ({ chatId, noTimeout }) => {
+    const info = humanChats.get(chatId);
+    if (info) info.noTimeout = !!noTimeout;
+  });
+
+  // Toggle timeout global (todos los chats del agente)
+  socket.on("toggle_timeout_global", ({ noTimeout }) => {
+    const uid = socket.agentUser.userId;
+    for (const [, info] of humanChats.entries()) {
+      if (info.agentUserId === uid) info.noTimeout = !!noTimeout;
     }
   });
 
@@ -812,15 +876,10 @@ adminIo.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    // No borrar chats activos: el agente puede reconectar
     for (const [chatId, info] of humanChats.entries()) {
       if (info.agentId === socket.id) {
-        humanChats.delete(chatId);
-        io.to(chatId).emit("system_message", {
-          text: "ℹ️ El agente se desconectó.",
-        });
-        io.to(chatId).emit("agent_finished", {});
-        clearAIModeTimer(chatId);
-        reset(chatId);
+        info.agentId = null; // marcar como desconectado temporalmente
       }
     }
   });
@@ -855,6 +914,10 @@ io.on("connection", async (socket) => {
     // Registrar mensaje del usuario
     pushTranscript(socket.id, { who: "user", text, ts, type: "text" });
     fanoutToAgentIfNeeded(socket.id, { who: "user", text, ts, type: "text" });
+
+    // Actualizar lastActivity
+    const hcUser = humanChats.get(socket.id);
+    if (hcUser) hcUser.lastActivity = ts;
 
     // Si ya lo atiende un humano, ignorar al bot
     if (humanChats.has(socket.id)) return;
@@ -987,6 +1050,10 @@ io.on("connection", async (socket) => {
       pushTranscript(socket.id, { who: "user", url, type: "image", ts });
       fanoutToAgentIfNeeded(socket.id, { who: "user", url, type: "image", ts });
 
+      // Actualizar lastActivity
+      const hcImg = humanChats.get(socket.id);
+      if (hcImg) hcImg.lastActivity = ts;
+
       if (humanChats.has(socket.id)) {
         socket.emit("system_message", { text: "📸 Imagen enviada al agente." });
         return;
@@ -1050,15 +1117,30 @@ io.on("connection", async (socket) => {
     if (humanChats.has(socket.id)) {
       const info = humanChats.get(socket.id);
       humanChats.delete(socket.id);
-      adminIo.to(info.agentId).emit("chat_message", {
-        chatId: socket.id,
-        who: "system",
-        text: "Usuario desconectado",
-        ts: Date.now(),
-      });
+      if (info.agentId) {
+        adminIo.to(info.agentId).emit("chat_ended", {
+          chatId: socket.id,
+          reason: "user_disconnect",
+        });
+      }
     }
   });
 });
+
+/* ====================== Inactivity Timer ====================== */
+setInterval(() => {
+  const now = Date.now();
+  for (const [chatId, info] of humanChats.entries()) {
+    if (info.noTimeout) continue; // chat marcado como sin timeout
+    if (info.lastActivity && (now - info.lastActivity) > INACTIVITY_TIMEOUT_MS) {
+      console.log(`⏱️ Inactividad: cerrando chat ${chatId}`);
+      DB.closeTicket(chatId, info.agentUserId);
+      endHumanChat(chatId, "timeout", io, adminIo);
+      const sid = bridgeChats.get(chatId);
+      if (sid) bridgeIo.to(sid).emit("finish", { chatId });
+    }
+  }
+}, 60 * 1000);
 
 /* ====================== Start ====================== */
 const PORT = process.env.PORT || 3000;

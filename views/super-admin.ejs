@@ -604,6 +604,69 @@
       border: 1px solid var(--border);
     }
 
+    /* Active Chats Live */
+    .active-chat-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+
+    .active-chat-row:hover {
+      border-color: var(--border-gold);
+    }
+
+    .active-chat-row .live-dot {
+      width: 10px;
+      height: 10px;
+      background: var(--success);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse-live 2s infinite;
+    }
+
+    @keyframes pulse-live {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+    }
+
+    .active-chat-row .ac-agent {
+      font-weight: 600;
+      color: var(--accent-gold);
+      font-size: 0.88rem;
+      min-width: 120px;
+    }
+
+    .active-chat-row .ac-client {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      min-width: 100px;
+    }
+
+    .active-chat-row .ac-topic {
+      flex: 1;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .active-chat-row .ac-time {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .active-chats-empty {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
     .rating-stars {
       color: var(--accent-gold);
       letter-spacing: 2px;
@@ -1162,6 +1225,20 @@
         </div>
       </div>
 
+      <!-- Active Chats Live -->
+      <div class="card wide" id="active-chats-card">
+        <div class="kpi-title">
+          <span>Chats Activos en Tiempo Real</span>
+          <button id="refresh-active-btn" class="btn-wa-action" title="Actualizar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Actualizar
+          </button>
+        </div>
+        <div id="active-chats-list" style="margin-top:12px;"></div>
+      </div>
+
       <div class="card">
         <div class="kpi-title">Clientes Hoy</div>
         <div class="kpi-value" id="kpi-today">...</div>
@@ -1308,8 +1385,11 @@
       console.log('Super-admin cargado');
       attachEventListeners();
       try { loadDashboardStats(); } catch (e) { console.error('Error en loadDashboardStats:', e); }
+      try { loadActiveChats(); } catch (e) { console.error('Error en loadActiveChats:', e); }
       try { initWaStatusSocket(); } catch (e) { console.error('Error en initWaStatusSocket:', e); }
       try { refreshWaStatus(); } catch (e) { console.error('Error en refreshWaStatus:', e); }
+      // Auto-refresh active chats every 30s
+      setInterval(() => { try { loadActiveChats(); } catch(e) {} }, 30000);
     });
 
     function attachEventListeners() {
@@ -1379,6 +1459,11 @@
       const waRefreshBtn = document.getElementById('wa-refresh-btn');
       if (waRefreshBtn) {
         waRefreshBtn.addEventListener('click', () => refreshWaStatus());
+      }
+
+      const refreshActiveBtn = document.getElementById('refresh-active-btn');
+      if (refreshActiveBtn) {
+        refreshActiveBtn.addEventListener('click', () => loadActiveChats());
       }
 
       console.log('Event listeners adjuntados');
@@ -1506,6 +1591,41 @@
       } catch (e) { console.error("Error cargando stats", e); }
     }
 
+    async function loadActiveChats() {
+      try {
+        const res = await fetch('/api/active-chats');
+        const chats = await res.json();
+        const container = document.getElementById('active-chats-list');
+        if (!chats.length) {
+          container.innerHTML = '<div class="active-chats-empty">No hay chats activos en este momento</div>';
+          return;
+        }
+        container.innerHTML = '';
+        chats.forEach(c => {
+          const ago = Math.round((Date.now() - c.lastActivity) / 60000);
+          const agoText = ago < 1 ? 'ahora' : ago + ' min';
+          const topic = getActiveReasonText(c.payload);
+          const div = document.createElement('div');
+          div.className = 'active-chat-row';
+          div.innerHTML = '<span class="live-dot"></span>'
+            + '<span class="ac-agent">' + escapeHtml(c.agentName) + '</span>'
+            + '<span class="ac-client">' + escapeHtml(c.chatId.slice(-8)) + '</span>'
+            + '<span class="ac-topic">' + escapeHtml(topic) + '</span>'
+            + '<span class="ac-time">Hace ' + agoText + '</span>'
+            + (c.agentConnected ? '' : '<span class="badge closed">Desconectado</span>');
+          container.appendChild(div);
+        });
+      } catch (e) { console.error('Error cargando chats activos:', e); }
+    }
+
+    function getActiveReasonText(p) {
+      if (!p) return 'Consulta General';
+      if (p.categoria) return p.categoria;
+      if (p.propform) return (p.propform.op || '') + ' ' + (p.propform.tipo || '');
+      if (p.indice) return p.indice;
+      return p.motivo || 'Consulta';
+    }
+
     function animateValue(id, start, end, duration) {
       if (start === end) return;
       const range = end - start;
@@ -1597,6 +1717,7 @@
       document.getElementById('agent-stats-bar').style.display = 'none';
       document.getElementById('page-title').innerText = 'Dashboard General';
       loadDashboardStats();
+      loadActiveChats();
     }
 
     // History
