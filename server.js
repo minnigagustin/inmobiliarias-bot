@@ -790,7 +790,6 @@ adminIo.on("connection", (socket) => {
       if (bridgeChats.has(chatId)) {
         bridgeIo.to(bridgeChats.get(chatId)).emit("deliver_image_to_user", { chatId, url, filePath });
       }
-      fanoutToAgentIfNeeded(chatId, { who: "agent", url, type: "image", ts });
     } catch (e) {
       console.error("Error agent_image:", e);
     }
