@@ -771,6 +771,31 @@ adminIo.on("connection", (socket) => {
     fanoutToAgentIfNeeded(chatId, { who: "agent", text, ts, type: "text" });
   });
 
+  // Agente envía imagen al cliente
+  socket.on("agent_image", ({ chatId, name, type, data }) => {
+    if (!chatId || !data) return;
+    try {
+      const base64 = String(data).split(",")[1];
+      if (!base64) return;
+      const ext = (type && type.split("/")[1]) || "png";
+      const fname = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const filePath = path.join(uploadsDir, fname);
+      fs.writeFileSync(filePath, Buffer.from(base64, "base64"));
+      const url = `/uploads/${fname}`;
+      const ts = Date.now();
+      pushTranscript(chatId, { who: "agent", url, type: "image", ts });
+      // Enviar al chat web del cliente
+      io.to(chatId).emit("agent_message", { text: "", type: "image", url });
+      // Enviar al bridge de WhatsApp
+      if (bridgeChats.has(chatId)) {
+        bridgeIo.to(bridgeChats.get(chatId)).emit("deliver_image_to_user", { chatId, url, filePath });
+      }
+      fanoutToAgentIfNeeded(chatId, { who: "agent", url, type: "image", ts });
+    } catch (e) {
+      console.error("Error agent_image:", e);
+    }
+  });
+
   // 🔥 UNIFICADO: Evento Finish (Cerrar Ticket + UI)
   socket.on("finish", ({ chatId }) => {
     const agentId = socket.agentUser.userId;

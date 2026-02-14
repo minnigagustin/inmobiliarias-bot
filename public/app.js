@@ -273,7 +273,12 @@ socket.on("system_message", (msg) => {
 // Cuando el agente envía un mensaje
 socket.on("agent_message", (msg) => {
   stopTyping();
-  if (msg.text) addMessage(msg.text, "bot"); // podés crear un estilo “agent” si querés diferenciar
+  if (msg.type === "image" && msg.url) {
+    addImage(msg.url, "bot");
+    if (msg.text) addMessage(msg.text, "bot");
+    return;
+  }
+  if (msg.text) addMessage(msg.text, "bot");
 });
 
 // Handoff: el server nos avisa que un agente tomó el caso

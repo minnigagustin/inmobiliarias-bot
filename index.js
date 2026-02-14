@@ -127,6 +127,27 @@ bridge.on("deliver_to_user", async ({ chatId, text }) => {
   }
 });
 
+// Orden desde el panel: entregar imagen del agente al usuario de WhatsApp
+bridge.on("deliver_image_to_user", async ({ chatId, url, filePath }) => {
+  if (!chatId) return;
+  try {
+    let media;
+    if (filePath && fs.existsSync(filePath)) {
+      media = MessageMedia.fromFilePath(filePath);
+    } else if (url) {
+      const absPath = path.join(__dirname, "public", url);
+      if (fs.existsSync(absPath)) {
+        media = MessageMedia.fromFilePath(absPath);
+      }
+    }
+    if (media) {
+      await client.sendMessage(chatId, media);
+    }
+  } catch (e) {
+    console.error("❌ Error deliver_image_to_user:", e?.message || e);
+  }
+});
+
 // Orden desde el panel: finalizar conversación humana
 bridge.on("finish", async ({ chatId }) => {
   humanMode.delete(chatId);
