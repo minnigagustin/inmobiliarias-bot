@@ -157,9 +157,10 @@ function extractTaxTerms(p) {
   // _embedded['wp:term'] es un array de arrays (una por taxonomía)
   const termGroups = p?._embedded?.["wp:term"] || [];
   const all = termGroups.flat();
-  const opTerm = all.find(t => t.taxonomy === TAX_OP);
-  const tipoTerm = all.find(t => t.taxonomy === TAX_TIPO);
-  const cityTerm = all.find(t => t.taxonomy === TAX_CITY);
+  // Los nombres de taxonomía en WP son: property-status, property-type, property-city
+  const opTerm = all.find(t => t.taxonomy === "property-status");
+  const tipoTerm = all.find(t => t.taxonomy === "property-type");
+  const cityTerm = all.find(t => t.taxonomy === "property-city");
   return {
     opName: opTerm?.name || null,
     tipoName: tipoTerm?.name || null,
