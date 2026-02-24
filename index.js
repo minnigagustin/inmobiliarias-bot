@@ -393,6 +393,10 @@ client.pupPage?.on("pageerror", (err) => {
   console.error("❌ Puppeteer page JS error:", err);
 });
 
+/** Deduplicación de mensajes (whatsapp-web.js puede disparar message múltiples veces) */
+const processedMsgs = new Set();
+const DEDUP_TTL_MS = 30_000; // 30 segundos
+
 /** Cache de media por chat para reenviarlas al agente por WhatsApp (opcional) */
 const mediaCache = new Map(); // Map<chatId, Array<MessageMedia>>
 const MEDIA_CACHE_MAX_CHATS = 50; // 🛡️ Límite máximo de chats en cache
@@ -420,6 +424,14 @@ function clearMedia(chatId) {
 }
 
 client.on("message", async (msg) => {
+  // Deduplicación: evitar procesar el mismo mensaje más de una vez
+  const msgId = msg.id?._serialized || msg.id?.id;
+  if (msgId && processedMsgs.has(msgId)) return;
+  if (msgId) {
+    processedMsgs.add(msgId);
+    setTimeout(() => processedMsgs.delete(msgId), DEDUP_TTL_MS);
+  }
+
   const chatId = msg.from; // JID 54911xxxxxxx@c.us
   bridgeRegisterIfNeeded(chatId);
 
