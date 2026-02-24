@@ -423,6 +423,25 @@ function clearMedia(chatId) {
   mediaCache.delete(chatId);
 }
 
+// ===== Simulación de typing humano =====
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function humanDelay(text) {
+  // Delay proporcional al largo del texto, con algo de variación
+  const len = typeof text === "string" ? text.length : 80;
+  const base = 800 + Math.random() * 700;        // 800-1500ms base (leer el msg)
+  const typing = Math.min(len * 35, 3500);        // ~35ms/char, tope 3.5s
+  const jitter = Math.random() * 400;             // variación ±400ms
+  return Math.round(base + typing + jitter);       // total ~1.2s – 5.5s
+}
+
+async function sendHuman(chat, chatId, content, opts) {
+  try { await chat.sendStateTyping(); } catch (_) {}
+  const text = opts?.caption || (typeof content === "string" ? content : "");
+  await sleep(humanDelay(text));
+  return client.sendMessage(chatId, content, opts);
+}
+
 client.on("message", async (msg) => {
   // Deduplicación: evitar procesar el mismo mensaje más de una vez
   const msgId = msg.id?._serialized || msg.id?.id;
@@ -445,7 +464,6 @@ client.on("message", async (msg) => {
         const media = await msg.downloadMedia();
         const saved = persistMediaToDisk(media);
         pushTx(chatId, { who: "user", url: saved.url, type: "image", ts });
-        await client.sendMessage(chatId, "📸 ¡Imagen recibida!");
       } else {
         pushTx(chatId, { who: "user", text: bodyRaw, type: "text", ts });
       }
@@ -457,12 +475,26 @@ client.on("message", async (msg) => {
 
   try {
     const chat = await msg.getChat();
-    try {
-      await chat.sendSeen();
-    } catch (_) {}
-    try {
-      await chat.sendStateTyping();
-    } catch (_) {}
+    try { await chat.sendSeen(); } catch (_) {}
+
+    // Helper: enviar array de replies con typing humano
+    async function sendReplies(arr) {
+      for (const t of arr) {
+        if (typeof t === "object" && t.imageUrl) {
+          try {
+            const m = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
+            await sendHuman(chat, chatId, m, { caption: t.text });
+          } catch (imgErr) {
+            console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
+            await sendHuman(chat, chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
+          }
+          pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
+        } else {
+          await sendHuman(chat, chatId, t);
+          pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+        }
+      }
+    }
 
     // ===== 1) Mensajes con MEDIA =====
     if (msg.hasMedia) {
@@ -480,21 +512,7 @@ client.on("message", async (msg) => {
         file: { url: saved.url, type: saved.type, name: saved.name },
       });
 
-      for (const t of replies) {
-        if (typeof t === "object" && t.imageUrl) {
-          try {
-            const media = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
-            await client.sendMessage(chatId, media, { caption: t.text });
-          } catch (imgErr) {
-            console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
-            await client.sendMessage(chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
-          }
-          pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
-        } else {
-          await client.sendMessage(chatId, t);
-          pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
-        }
-      }
+      await sendReplies(replies);
 
       const sNow = getSession(chatId);
       if (sNow && sNow.step === "consultas_ia" && sNow.data?.ai?.active) {
@@ -519,21 +537,7 @@ client.on("message", async (msg) => {
           aiSignal: aiSignal2,
         } = await handleText({ chatId, text: bodyRaw });
 
-        for (const t of replies2) {
-          if (typeof t === "object" && t.imageUrl) {
-            try {
-              const media = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
-              await client.sendMessage(chatId, media, { caption: t.text });
-            } catch (imgErr) {
-              console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
-              await client.sendMessage(chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
-            }
-            pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
-          } else {
-            await client.sendMessage(chatId, t);
-            pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
-          }
-        }
+        await sendReplies(replies2);
 
         // Programación / limpieza de timer IA (para caption)
         if (aiSignal2?.mode === "on" || aiSignal2?.mode === "extend") {
@@ -551,7 +555,7 @@ client.on("message", async (msg) => {
             payload: notifyAgent2,
           });
           const infoTxt = "📣 (Demo) Un agente fue notificado.";
-          await client.sendMessage(chatId, infoTxt);
+          await sendHuman(chat, chatId, infoTxt);
           pushTx(chatId, {
             who: "system",
             type: "text",
@@ -582,23 +586,7 @@ client.on("message", async (msg) => {
       text: bodyRaw,
     });
 
-    for (const t of replies) {
-      if (typeof t === "object" && t.imageUrl) {
-        // Propiedad con imagen: enviar como media con caption
-        try {
-          const media = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
-          await client.sendMessage(chatId, media, { caption: t.text });
-        } catch (imgErr) {
-          // Fallback: enviar como texto si la imagen falla
-          console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
-          await client.sendMessage(chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
-        }
-        pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
-      } else {
-        await client.sendMessage(chatId, t);
-        pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
-      }
-    }
+    await sendReplies(replies);
 
     // Programación / limpieza de timer IA
     if (aiSignal?.mode === "on" || aiSignal?.mode === "extend") {
@@ -617,7 +605,7 @@ client.on("message", async (msg) => {
       });
 
       const infoTxt = "📣 (Demo) Un agente fue notificado.";
-      await client.sendMessage(chatId, infoTxt);
+      await sendHuman(chat, chatId, infoTxt);
       pushTx(chatId, {
         who: "system",
         type: "text",
