@@ -481,13 +481,19 @@ client.on("message", async (msg) => {
       });
 
       for (const t of replies) {
-        await client.sendMessage(chatId, t);
-        pushTx(chatId, {
-          who: "bot",
-          type: "text",
-          text: t,
-          ts: Date.now(),
-        });
+        if (typeof t === "object" && t.imageUrl) {
+          try {
+            const media = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
+            await client.sendMessage(chatId, media, { caption: t.text });
+          } catch (imgErr) {
+            console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
+            await client.sendMessage(chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
+          }
+          pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
+        } else {
+          await client.sendMessage(chatId, t);
+          pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+        }
       }
 
       const sNow = getSession(chatId);
@@ -514,8 +520,19 @@ client.on("message", async (msg) => {
         } = await handleText({ chatId, text: bodyRaw });
 
         for (const t of replies2) {
-          await client.sendMessage(chatId, t);
-          pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+          if (typeof t === "object" && t.imageUrl) {
+            try {
+              const media = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
+              await client.sendMessage(chatId, media, { caption: t.text });
+            } catch (imgErr) {
+              console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
+              await client.sendMessage(chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
+            }
+            pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
+          } else {
+            await client.sendMessage(chatId, t);
+            pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+          }
         }
 
         // Programación / limpieza de timer IA (para caption)
@@ -566,8 +583,21 @@ client.on("message", async (msg) => {
     });
 
     for (const t of replies) {
-      await client.sendMessage(chatId, t);
-      pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+      if (typeof t === "object" && t.imageUrl) {
+        // Propiedad con imagen: enviar como media con caption
+        try {
+          const media = await MessageMedia.fromUrl(t.imageUrl, { unsafeMime: true });
+          await client.sendMessage(chatId, media, { caption: t.text });
+        } catch (imgErr) {
+          // Fallback: enviar como texto si la imagen falla
+          console.error("⚠️ Error descargando imagen propiedad:", imgErr?.message);
+          await client.sendMessage(chatId, `${t.text}\n📷 Foto: ${t.imageUrl}`);
+        }
+        pushTx(chatId, { who: "bot", type: "text", text: t.text, ts: Date.now() });
+      } else {
+        await client.sendMessage(chatId, t);
+        pushTx(chatId, { who: "bot", type: "text", text: t, ts: Date.now() });
+      }
     }
 
     // Programación / limpieza de timer IA

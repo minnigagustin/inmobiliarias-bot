@@ -575,18 +575,17 @@ Por email, acceso web o copia impresa.
 }
 
 function fmtPropCard(p) {
-  const imgLine = p.image ? `📷 Foto: ${p.image}\n` : "";
   const desc = p.excerpt ? `📝 ${p.excerpt}\n` : "";
   const tags = [p.opName, p.tipoName].filter(Boolean).join(" · ");
   const tagLine = tags ? `🏷️ ${tags}\n` : "";
-  return (
+  const text =
     `🏠 *${p.title}*\n` +
     tagLine +
     `💰 *${fmtAmount(p.price, p.currency)}*\n` +
-    imgLine +
     desc +
-    `🔗 Ver publicación: ${p.link}`
-  );
+    `🔗 Ver publicación: ${p.link}`;
+  // Devuelve objeto con imageUrl separada para que WhatsApp la envíe como media
+  return p.image ? { text, imageUrl: p.image } : text;
 }
 
 // ===== Intent handler (NLU) =====
