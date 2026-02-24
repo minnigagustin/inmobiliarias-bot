@@ -1,19 +1,36 @@
 :root{
-  /* Brand */
-  --cw-primary: #2563eb;
-  --cw-primary-2: #1d4ed8;
+  /* Brand — Indigo */
+  --cw-primary: #6366f1;
+  --cw-primary-2: #4f46e5;
 
   /* Light theme */
   --cw-bg: #ffffff;
   --cw-surface: #ffffff;
-  --cw-surface-2: #f8fafc; /* slate-50 */
-  --cw-line: rgba(15, 23, 42, .10); /* slate-900 @ 10% */
-  --cw-text: #0f172a; /* slate-900 */
-  --cw-muted: #64748b; /* slate-500 */
+  --cw-surface-2: #f8fafc;
+  --cw-line: rgba(15, 23, 42, .10);
+  --cw-text: #0f172a;
+  --cw-muted: #64748b;
   --cw-shadow: 0 18px 55px rgba(2, 6, 23, .18);
   --cw-radius: 18px;
+  --cw-msg-bg: #fff;
 
   --cw-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+}
+
+/* Dark mode via prefers-color-scheme */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cw-primary: #818cf8;
+    --cw-primary-2: #6366f1;
+    --cw-bg: #09090b;
+    --cw-surface: #18181b;
+    --cw-surface-2: #27272a;
+    --cw-line: rgba(255, 255, 255, .08);
+    --cw-text: #fafafa;
+    --cw-muted: #a1a1aa;
+    --cw-shadow: 0 18px 55px rgba(0, 0, 0, .5);
+    --cw-msg-bg: #18181b;
+  }
 }
 
 *{ box-sizing:border-box; }
@@ -124,8 +141,8 @@ html, body{
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  background: rgba(37, 99, 235, .10);
-  border: 1px solid rgba(37, 99, 235, .18);
+  background: rgba(99, 102, 241, .10);
+  border: 1px solid rgba(99, 102, 241, .18);
   display:grid;
   place-items:center;
   flex: 0 0 auto;
@@ -177,7 +194,7 @@ html, body{
   flex: 1;
   padding: 14px 14px 10px;
   overflow: auto;
-  background: #fff;
+  background: var(--cw-msg-bg);
 
   display:flex;
   flex-direction:column;
@@ -204,22 +221,22 @@ html, body{
 
 /* Bot bubble */
 .cw-msg.bot .cw-bubble{
-  background: #f8fafc;
+  background: var(--cw-surface-2);
   border-top-left-radius: 8px;
 }
 
 /* User bubble */
 .cw-msg.user .cw-bubble{
-  background: rgba(37, 99, 235, .10);
-  border-color: rgba(37, 99, 235, .22);
+  background: rgba(99, 102, 241, .10);
+  border-color: rgba(99, 102, 241, .22);
   border-top-right-radius: 8px;
 }
 
 /* System */
 .cw-msg.system .cw-bubble{
-  background: #fff7ed; /* orange-50 */
-  border-color: rgba(234, 88, 12, .18);
-  color: #7c2d12;
+  background: var(--cw-surface-2);
+  border-color: var(--cw-line);
+  color: var(--cw-muted);
   font-size: 12px;
   text-align:center;
   max-width: 92%;
@@ -285,7 +302,7 @@ html, body{
   height: 40px;
   border-radius: 14px;
   border: 1px solid var(--cw-line);
-  background: #fff;
+  background: var(--cw-surface);
   padding: 0 12px;
   outline:none;
   color: var(--cw-text);
@@ -296,7 +313,7 @@ html, body{
   height: 40px;
   padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid rgba(37,99,235,.25);
+  border: 1px solid rgba(99,102,241,.25);
   background: linear-gradient(180deg, var(--cw-primary), var(--cw-primary-2));
   color:#fff;
   font-weight: 700;
@@ -372,9 +389,9 @@ html, body{
 
 /* Launcher pulse */
 @keyframes cw-pulse{
-  0%{ box-shadow: 0 0 0 0 rgba(37,99,235,.35); }
-  70%{ box-shadow: 0 0 0 12px rgba(37,99,235,0); }
-  100%{ box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+  0%{ box-shadow: 0 0 0 0 rgba(99,102,241,.35); }
+  70%{ box-shadow: 0 0 0 12px rgba(99,102,241,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(99,102,241,0); }
 }
 
 .cw-launcher{
