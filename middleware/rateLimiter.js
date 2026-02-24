@@ -13,7 +13,7 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting for static files and WebSocket
-    return req.path.startsWith('/socket.io') || req.path.startsWith('/uploads');
+    return req.path.startsWith('/socket.io') || req.path.startsWith('/uploads') || req.path.startsWith('/css/') || req.path.startsWith('/widget/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.png') || req.path.endsWith('.ico');
   }
 });
 
